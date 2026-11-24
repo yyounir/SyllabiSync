@@ -31,6 +31,8 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { Colors } from '@/constants/colors';
 import { Spacing, Typography, BorderRadius, MaxContentWidth } from '@/constants/theme';
 import {
+  Archive,
+  ArchiveRestore,
   ArrowLeft,
   BookOpen,
   Calendar,
@@ -128,6 +130,31 @@ export default function ClassDashboardScreen() {
   const [newNoteTitle, setNewNoteTitle] = useState('');
   const [newNoteContent, setNewNoteContent] = useState('');
   const [creatingNote, setCreatingNote] = useState(false);
+
+  // ==========================================
+  // Class Archive & Deletion State
+  // ==========================================
+  const [deleteConfirmModalVisible, setDeleteConfirmModalVisible] = useState(false);
+  const [deletingClass, setDeletingClass] = useState(false);
+
+  const handleToggleArchive = async () => {
+    if (!classData || !classId) return;
+    const nextArchived = !classData.is_archived;
+    setClassData((prev) => (prev ? { ...prev, is_archived: nextArchived } : null));
+    await classService.archiveClass(classId, nextArchived);
+  };
+
+  const handleDeleteClassConfirm = async () => {
+    if (!classId) return;
+    setDeletingClass(true);
+    try {
+      await classService.deleteClass(classId);
+      router.replace('/(tabs)/classes');
+    } catch (err) {
+      console.error('Error deleting class:', err);
+      setDeletingClass(false);
+    }
+  };
 
   const loadData = useCallback(async () => {
     if (!classId) return;
@@ -467,6 +494,26 @@ export default function ClassDashboardScreen() {
 
           <View style={styles.headerRightActions}>
             <Button
+              title={classData?.is_archived ? 'Unarchive' : 'Archive'}
+              variant="outline"
+              size="sm"
+              icon={
+                classData?.is_archived ? (
+                  <ArchiveRestore size={14} color={Colors.light.primary} />
+                ) : (
+                  <Archive size={14} color={Colors.light.textSecondary} />
+                )
+              }
+              onPress={handleToggleArchive}
+            />
+            <Button
+              title="Delete"
+              variant="outline"
+              size="sm"
+              icon={<Trash2 size={14} color={Colors.light.danger} />}
+              onPress={() => setDeleteConfirmModalVisible(true)}
+            />
+            <Button
               title="Upload Syllabus"
               variant="outline"
               size="sm"
@@ -481,6 +528,28 @@ export default function ClassDashboardScreen() {
             />
           </View>
         </View>
+
+        {/* Archived Banner Notice */}
+        {classData?.is_archived && (
+          <View style={styles.archivedBanner}>
+            <View style={styles.archivedBannerContent}>
+              <Archive size={18} color={Colors.light.textSecondary} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.archivedBannerTitle}>This course is archived</Text>
+                <Text style={styles.archivedBannerSubtitle}>
+                  Its deadlines are hidden from your active dashboard.
+                </Text>
+              </View>
+            </View>
+            <Button
+              title="Unarchive Course"
+              variant="outline"
+              size="sm"
+              icon={<ArchiveRestore size={14} color={Colors.light.primary} />}
+              onPress={handleToggleArchive}
+            />
+          </View>
+        )}
 
         {/* Hero Card */}
         <Card variant="elevated" style={styles.heroCard}>
@@ -1557,6 +1626,42 @@ export default function ClassDashboardScreen() {
             </Card>
           </View>
         </Modal>
+
+        {/* Delete Class Confirmation Modal */}
+        <Modal
+          visible={deleteConfirmModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setDeleteConfirmModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <Card style={styles.confirmModalCard}>
+              <View style={styles.dangerIconBadge}>
+                <Trash2 size={26} color={Colors.light.danger} />
+              </View>
+              <Text style={styles.confirmModalTitle}>
+                Delete {classData?.course_code}?
+              </Text>
+              <Text style={styles.confirmModalDesc}>
+                This will permanently delete &ldquo;{classData?.course_name}&rdquo; along with all associated tasks, exams, and notes. This action cannot be undone.
+              </Text>
+              <View style={styles.confirmModalActions}>
+                <Button
+                  title="Cancel"
+                  variant="outline"
+                  onPress={() => setDeleteConfirmModalVisible(false)}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  title="Delete Class"
+                  variant="danger"
+                  loading={deletingClass}
+                  onPress={handleDeleteClassConfirm}
+                  style={{ flex: 1 }}
+                />
+              </View>
+            </Card>
+          </View>
+        </Modal>
       </View>
     </ScrollView>
   );
@@ -2038,5 +2143,69 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.8,
+  },
+  archivedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F1F5F9',
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.three,
+    marginBottom: Spacing.four,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    gap: Spacing.three,
+    flexWrap: 'wrap',
+  },
+  archivedBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    flex: 1,
+    minWidth: 240,
+  },
+  archivedBannerTitle: {
+    ...Typography.sm,
+    fontWeight: '700',
+    color: Colors.light.text,
+  },
+  archivedBannerSubtitle: {
+    ...Typography.xs,
+    color: Colors.light.textSecondary,
+    marginTop: 2,
+  },
+  confirmModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    alignItems: 'center',
+    padding: Spacing.five,
+  },
+  dangerIconBadge: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: Colors.light.dangerLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.three,
+  },
+  confirmModalTitle: {
+    ...Typography.lg,
+    fontWeight: '700',
+    color: Colors.light.text,
+    marginBottom: Spacing.two,
+    textAlign: 'center',
+  },
+  confirmModalDesc: {
+    ...Typography.sm,
+    color: Colors.light.textSecondary,
+    textAlign: 'center',
+    marginBottom: Spacing.five,
+    lineHeight: 20,
+  },
+  confirmModalActions: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    width: '100%',
   },
 });

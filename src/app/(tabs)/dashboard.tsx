@@ -79,17 +79,21 @@ export default function DashboardScreen() {
     loadDashboardData();
   };
 
-  // Calculations
-  const totalClasses = classes.length;
-  const completedItems = items.filter((i) => i.status === 'completed').length;
-  const pendingItems = items.filter((i) => i.status !== 'completed');
+  // Calculations (focused on active courses)
+  const activeClasses = classes.filter((c) => !c.is_archived);
+  const activeClassIds = new Set(activeClasses.map((c) => c.id));
+  const activeItems = items.filter((i) => activeClassIds.has(i.class_id));
+
+  const totalClasses = activeClasses.length;
+  const completedItems = activeItems.filter((i) => i.status === 'completed').length;
+  const pendingItems = activeItems.filter((i) => i.status !== 'completed');
   const upcomingExams = pendingItems.filter(
     (i) => i.type === 'exam' || i.type === 'quiz'
   ).length;
   const completionRate =
-    items.length > 0 ? Math.round((completedItems / items.length) * 100) : 0;
+    activeItems.length > 0 ? Math.round((completedItems / activeItems.length) * 100) : 0;
 
-  // Upcoming deadlines (next 6 incomplete)
+  // Upcoming deadlines (next 6 incomplete across active classes)
   const upcomingDeadlines = pendingItems.slice(0, 6);
 
   return (
@@ -179,17 +183,17 @@ export default function DashboardScreen() {
           )}
         </View>
 
-        {classes.length === 0 && !loading ? (
+        {activeClasses.length === 0 && !loading ? (
           <EmptyState
             icon={<Upload size={32} color={Colors.light.primary} />}
-            title="No courses added yet"
+            title="No active courses yet"
             description="Upload your first course syllabus PDF. SyllabiSync will automatically extract assignments, exam dates, grading policies, and build your dashboard in seconds."
             actionTitle="Upload Syllabus PDF"
             onAction={() => router.push('/classes/upload-syllabus')}
           />
         ) : (
           <View style={styles.classesGrid}>
-            {classes.map((c) => (
+            {activeClasses.map((c) => (
               <ClassCard key={c.id} classItem={c} items={items} />
             ))}
           </View>

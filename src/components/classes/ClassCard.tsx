@@ -1,20 +1,35 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import { Card } from '@/components/common/Card';
 import { ProgressBar } from '@/components/common/ProgressBar';
 import { Colors } from '@/constants/colors';
 import { Spacing, Typography, BorderRadius } from '@/constants/theme';
 import { ClassItem, AcademicItem } from '@/types/database';
-import { Calendar, CheckCircle2, ChevronRight, User } from 'lucide-react-native';
+import {
+  Archive,
+  ArchiveRestore,
+  Calendar,
+  CheckCircle2,
+  ChevronRight,
+  Trash2,
+  User,
+} from 'lucide-react-native';
 import { format, isPast, parseISO } from 'date-fns';
 
 interface ClassCardProps {
   classItem: ClassItem;
   items?: AcademicItem[];
+  onArchiveToggle?: (classItem: ClassItem) => void;
+  onDelete?: (classItem: ClassItem) => void;
 }
 
-export function ClassCard({ classItem, items = [] }: ClassCardProps) {
+export function ClassCard({
+  classItem,
+  items = [],
+  onArchiveToggle,
+  onDelete,
+}: ClassCardProps) {
   const classItems = items.filter((i) => i.class_id === classItem.id);
   const completedCount = classItems.filter((i) => i.status === 'completed').length;
   const totalCount = classItems.length;
@@ -30,20 +45,74 @@ export function ClassCard({ classItem, items = [] }: ClassCardProps) {
 
   return (
     <Card
-      style={styles.card}
+      style={[styles.card, classItem.is_archived && styles.cardArchived]}
       onPress={() => router.push(`/classes/${classItem.id}` as any)}>
       {/* Accent color bar */}
-      <View style={[styles.colorBar, { backgroundColor: classItem.color || Colors.light.primary }]} />
+      <View
+        style={[
+          styles.colorBar,
+          {
+            backgroundColor: classItem.is_archived
+              ? Colors.light.textMuted
+              : classItem.color || Colors.light.primary,
+          },
+        ]}
+      />
 
       <View style={styles.innerContent}>
         {/* Header */}
         <View style={styles.headerRow}>
-          <View style={styles.courseBadge}>
-            <Text style={[styles.courseCode, { color: classItem.color || Colors.light.primary }]}>
-              {classItem.course_code}
-            </Text>
+          <View style={styles.badgeRow}>
+            <View style={styles.courseBadge}>
+              <Text
+                style={[
+                  styles.courseCode,
+                  {
+                    color: classItem.is_archived
+                      ? Colors.light.textSecondary
+                      : classItem.color || Colors.light.primary,
+                  },
+                ]}>
+                {classItem.course_code}
+              </Text>
+            </View>
+            {classItem.is_archived && (
+              <View style={styles.archivedPill}>
+                <Archive size={11} color={Colors.light.textSecondary} />
+                <Text style={styles.archivedPillText}>Archived</Text>
+              </View>
+            )}
           </View>
-          <ChevronRight size={18} color={Colors.light.textMuted} />
+
+          <View style={styles.actionRow}>
+            {onArchiveToggle && (
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onArchiveToggle(classItem);
+                }}
+                hitSlop={8}
+                style={({ pressed }) => [styles.iconActionBtn, pressed && styles.pressed]}>
+                {classItem.is_archived ? (
+                  <ArchiveRestore size={15} color={Colors.light.primary} />
+                ) : (
+                  <Archive size={15} color={Colors.light.textSecondary} />
+                )}
+              </Pressable>
+            )}
+            {onDelete && (
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onDelete(classItem);
+                }}
+                hitSlop={8}
+                style={({ pressed }) => [styles.iconActionBtn, pressed && styles.pressed]}>
+                <Trash2 size={15} color={Colors.light.danger} />
+              </Pressable>
+            )}
+            <ChevronRight size={18} color={Colors.light.textMuted} />
+          </View>
         </View>
 
         <Text style={styles.courseName} numberOfLines={1}>
@@ -86,7 +155,11 @@ export function ClassCard({ classItem, items = [] }: ClassCardProps) {
           </View>
           <ProgressBar
             progress={progress}
-            color={classItem.color || Colors.light.primary}
+            color={
+              classItem.is_archived
+                ? Colors.light.textMuted
+                : classItem.color || Colors.light.primary
+            }
             height={6}
           />
         </View>
@@ -99,10 +172,11 @@ const styles = StyleSheet.create({
   card: {
     padding: 0,
     overflow: 'hidden',
-    minWidth: 260,
-    flex: 1,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
+    minHeight: 180,
+  },
+  cardArchived: {
+    opacity: 0.85,
+    backgroundColor: '#F8FAFC',
   },
   colorBar: {
     height: 6,
@@ -110,12 +184,27 @@ const styles = StyleSheet.create({
   },
   innerContent: {
     padding: Spacing.four,
+    flex: 1,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.one,
+    marginBottom: Spacing.two,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  iconActionBtn: {
+    padding: 4,
+    borderRadius: BorderRadius.sm,
   },
   courseBadge: {
     backgroundColor: Colors.light.backgroundElement,
@@ -127,6 +216,20 @@ const styles = StyleSheet.create({
     ...Typography.xs,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  archivedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.light.backgroundElement,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
+  },
+  archivedPillText: {
+    ...Typography.xs,
+    color: Colors.light.textSecondary,
+    fontWeight: '600',
   },
   courseName: {
     ...Typography.md,
@@ -190,5 +293,8 @@ const styles = StyleSheet.create({
     ...Typography.xs,
     color: Colors.light.text,
     fontWeight: '700',
+  },
+  pressed: {
+    opacity: 0.6,
   },
 });

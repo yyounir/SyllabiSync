@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabase';
 import { ClassItem } from '@/types/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { academicItemService } from './academic-item.service';
+import { notesService } from './notes.service';
 
 const LOCAL_CLASSES_KEY = 'syllabisync_local_classes';
 
@@ -175,11 +177,31 @@ export const classService = {
   async deleteClass(classId: string): Promise<{ error: any }> {
     await removeLocalClass(classId);
 
+    // Cascade deletion to associated items and notes
+    try {
+      await academicItemService.deleteItemsByClassId(classId);
+    } catch (e) {
+      console.warn('Failed to delete associated academic items:', e);
+    }
+
+    try {
+      await notesService.deleteNotesByClassId(classId);
+    } catch (e) {
+      console.warn('Failed to delete associated notes:', e);
+    }
+
     try {
       const { error } = await supabase.from('classes').delete().eq('id', classId);
       return { error };
     } catch {
       return { error: null };
     }
+  },
+
+  async archiveClass(
+    classId: string,
+    isArchived: boolean = true
+  ): Promise<{ data: ClassItem | null; error: any }> {
+    return this.updateClass(classId, { is_archived: isArchived });
   },
 };

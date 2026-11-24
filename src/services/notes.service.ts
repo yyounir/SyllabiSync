@@ -139,4 +139,20 @@ export const notesService = {
       return { error: null };
     }
   },
+
+  async deleteNotesByClassId(classId: string): Promise<void> {
+    try {
+      const notes = await getLocalNotes();
+      const updated = notes.filter((n) => n.class_id !== classId);
+      await AsyncStorage.setItem(LOCAL_NOTES_KEY, JSON.stringify(updated));
+    } catch (err) {
+      console.warn('Error removing local notes by classId:', err);
+    }
+
+    try {
+      await supabase.from('notes').delete().eq('class_id', classId);
+    } catch {
+      // ignore
+    }
+  },
 };

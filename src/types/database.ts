@@ -41,6 +41,7 @@ export interface ClassItem {
   attendance_policy?: string | null;
   late_policy?: string | null;
   required_textbooks?: string[] | null;
+  is_archived?: boolean;
   created_at: string;
   updated_at: string;
 }

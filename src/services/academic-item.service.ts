@@ -297,4 +297,20 @@ export const academicItemService = {
       return { error: null };
     }
   },
+
+  async deleteItemsByClassId(classId: string): Promise<void> {
+    try {
+      const items = await getLocalItems();
+      const updated = items.filter((i) => i.class_id !== classId);
+      await AsyncStorage.setItem(LOCAL_ITEMS_KEY, JSON.stringify(updated));
+    } catch (err) {
+      console.warn('Error removing local items by classId:', err);
+    }
+
+    try {
+      await supabase.from('academic_items').delete().eq('class_id', classId);
+    } catch {
+      // ignore
+    }
+  },
 };
