@@ -27,6 +27,8 @@ import {
   FileText,
 } from 'lucide-react-native';
 
+const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.doc', '.txt'];
+
 export default function UploadSyllabusScreen() {
   const { user } = useAuth();
   const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
@@ -39,16 +41,31 @@ export default function UploadSyllabusScreen() {
     try {
       setError(null);
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf'],
+        type: [
+          'application/pdf',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/msword',
+          'text/plain',
+          '*/*',
+        ],
         copyToCacheDirectory: true,
       });
 
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
+        const lowerName = asset.name.toLowerCase();
+        const hasValidExt = ALLOWED_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
+
+        if (!hasValidExt) {
+          setError(
+            'Please select a supported document: PDF (.pdf) or Word document (.docx, .doc).'
+          );
+          return;
+        }
 
         // Size check (15MB limit)
         if (asset.size && asset.size > 15 * 1024 * 1024) {
-          setError('File size exceeds 15MB limit. Please upload a smaller PDF.');
+          setError('File size exceeds 15MB limit. Please upload a smaller document.');
           return;
         }
 
@@ -56,7 +73,7 @@ export default function UploadSyllabusScreen() {
           uri: asset.uri,
           name: asset.name,
           size: asset.size,
-          mimeType: asset.mimeType || 'application/pdf',
+          mimeType: asset.mimeType || (lowerName.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf'),
           file: asset.file,
         });
       }
@@ -67,18 +84,32 @@ export default function UploadSyllabusScreen() {
   };
 
   const handleStartAnalysis = async () => {
-    if (!user || !selectedFile) return;
+    if (!selectedFile) {
+      setError('Please select a syllabus document first.');
+      return;
+    }
+
+    const currentUserId = user?.id || 'guest_student';
 
     setError(null);
     setProcessing(true);
     setProgress(15);
-    setStepMessage('Uploading syllabus to private cloud storage...');
+    setStepMessage('Reading document structure...');
 
     try {
-      setProgress(40);
-      setStepMessage('Sending syllabus to Google Gemini AI...');
+      const isWord = aiSyllabusService.isDocxFile(selectedFile.name, selectedFile.mimeType);
 
-      const result = await aiSyllabusService.analyzeSyllabus(user.id, selectedFile);
+      setProgress(35);
+      setStepMessage(
+        isWord
+          ? 'Extracting Word (.docx) document content...'
+          : 'Uploading syllabus to secure storage...'
+      );
+
+      setProgress(60);
+      setStepMessage('Sending syllabus to Google Gemini AI (gemini-3.8-flash)...');
+
+      const result = await aiSyllabusService.analyzeSyllabus(currentUserId, selectedFile);
 
       if (result.error) {
         throw new Error(result.error.message || 'Gemini syllabus analysis failed');
@@ -103,18 +134,18 @@ export default function UploadSyllabusScreen() {
 
       setTimeout(() => {
         router.push('/classes/review-syllabus');
-      }, 500);
+      }, 400);
     } catch (err: any) {
       console.error('Syllabus analysis failed:', err);
       setError(
-        err?.message || 'Failed to analyze syllabus. Please try again or use a sample syllabus.'
+        err?.message ||
+          'Failed to analyze syllabus. Please verify your document or try one of the sample syllabi.'
       );
       setProcessing(false);
     }
   };
 
   const handleUseDemo = async (demo: { name: string; courseCode: string; text: string }) => {
-    if (!user) return;
     setError(null);
     setProcessing(true);
     setProgress(30);
@@ -150,7 +181,7 @@ export default function UploadSyllabusScreen() {
 
       setTimeout(() => {
         router.push('/classes/review-syllabus');
-      }, 500);
+      }, 400);
     } catch (err: any) {
       console.error('Demo syllabus failed:', err);
       setError(err?.message || 'Error running demo syllabus.');
@@ -159,6 +190,9 @@ export default function UploadSyllabusScreen() {
   };
 
   const demoSyllabi = aiSyllabusService.getDemoSyllabi();
+  const isWordDoc = selectedFile
+    ? aiSyllabusService.isDocxFile(selectedFile.name, selectedFile.mimeType)
+    : false;
 
   return (
     <ScrollView
@@ -177,12 +211,12 @@ export default function UploadSyllabusScreen() {
         <View style={styles.titleSection}>
           <View style={styles.taglineBadge}>
             <Sparkles size={14} color={Colors.light.primary} />
-            <Text style={styles.taglineText}>Powered by Google Gemini 2.5</Text>
+            <Text style={styles.taglineText}>Powered by Google Gemini 3.8 Flash</Text>
           </View>
           <Text style={styles.pageTitle}>Upload Course Syllabus</Text>
           <Text style={styles.pageSubtitle}>
-            Upload a syllabus PDF and let Gemini extract your assignments, exams,
-            grading weights, and semester schedule automatically.
+            Upload a syllabus PDF or Word document (.docx) and let Gemini extract your
+            assignments, exams, grading weights, and semester schedule automatically.
           </Text>
         </View>
 
@@ -197,8 +231,16 @@ export default function UploadSyllabusScreen() {
         <Card variant="elevated" style={styles.uploadCard}>
           {!processing ? (
             <View style={styles.uploadZone}>
-              <View style={styles.uploadIconCircle}>
-                <FileUp size={34} color={Colors.light.primary} />
+              <View
+                style={[
+                  styles.uploadIconCircle,
+                  isWordDoc && { backgroundColor: '#EFF6FF' },
+                ]}>
+                {isWordDoc ? (
+                  <FileText size={34} color="#2563EB" />
+                ) : (
+                  <FileUp size={34} color={Colors.light.primary} />
+                )}
               </View>
 
               {selectedFile ? (
@@ -207,12 +249,14 @@ export default function UploadSyllabusScreen() {
                     {selectedFile.name}
                   </Text>
                   <Text style={styles.selectedFileSize}>
-                    {selectedFile.size
+                    {isWordDoc
+                      ? 'Word Document (.docx) Ready'
+                      : selectedFile.size
                       ? `${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB • PDF Document`
                       : 'PDF Document Ready'}
                   </Text>
                   <Button
-                    title="Change File"
+                    title="Change Document"
                     variant="outline"
                     size="sm"
                     onPress={handlePickDocument}
@@ -221,12 +265,12 @@ export default function UploadSyllabusScreen() {
                 </View>
               ) : (
                 <View style={styles.pickPrompt}>
-                  <Text style={styles.pickTitle}>Select your syllabus PDF</Text>
+                  <Text style={styles.pickTitle}>Select your syllabus file</Text>
                   <Text style={styles.pickSubtitle}>
-                    Supports PDF documents up to 15MB
+                    Supports PDF and Word (.docx, .doc) files up to 15MB
                   </Text>
                   <Button
-                    title="Browse Files"
+                    title="Browse PDF or Word Document"
                     icon={<Upload size={16} color="#FFFFFF" />}
                     onPress={handlePickDocument}
                     style={styles.browseButton}
@@ -252,7 +296,7 @@ export default function UploadSyllabusScreen() {
               <ProgressBar progress={progress} height={10} style={{ width: '85%' }} />
               <View style={styles.extractionNotes}>
                 <Text style={styles.extractionNoteItem}>
-                  ✓ Preserving original syllabus excerpts
+                  ✓ Parsing {isWordDoc ? 'Word document' : 'PDF'} content
                 </Text>
                 <Text style={styles.extractionNoteItem}>
                   ✓ Calculating assignment dates & points

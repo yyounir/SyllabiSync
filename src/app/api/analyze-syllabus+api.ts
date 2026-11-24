@@ -1,18 +1,19 @@
 import { GoogleGenAI } from '@google/genai';
+import mammoth from 'mammoth';
 import { ExtractedSyllabusSchema } from '@/types/academic';
 
 export async function POST(request: Request) {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || process.env.EXPO_PUBLIC_GEMINI_API_KEY;
     if (!apiKey) {
       return Response.json(
-        { error: 'Server GEMINI_API_KEY is not configured' },
+        { error: 'Server GEMINI_API_KEY is not configured in .env' },
         { status: 500 }
       );
     }
 
     const body = await request.json();
-    const { pdfBase64, textContent, filename } = body;
+    const { pdfBase64, textContent, filename = 'syllabus.pdf', fileType } = body;
 
     if (!pdfBase64 && !textContent) {
       return Response.json(
@@ -79,8 +80,26 @@ Output MUST strictly be valid JSON matching this schema:
 }`;
 
     const contents: any[] = [];
+    const isDocx =
+      fileType === 'docx' ||
+      filename.toLowerCase().endsWith('.docx') ||
+      filename.toLowerCase().endsWith('.doc');
 
-    if (pdfBase64) {
+    if (isDocx && pdfBase64) {
+      // Extract text from Word document using mammoth
+      let docText = '';
+      try {
+        const buffer = Buffer.from(pdfBase64, 'base64');
+        const extracted = await mammoth.extractRawText({ buffer });
+        docText = extracted.value;
+      } catch (docErr) {
+        console.warn('Mammoth docx extraction warning, fallback to text conversion:', docErr);
+      }
+
+      contents.push({
+        text: `Please analyze this Word course syllabus document (${filename}):\n\n${docText || 'Unable to extract text'}`,
+      });
+    } else if (pdfBase64 && (filename.toLowerCase().endsWith('.pdf') || !filename.includes('.'))) {
       contents.push({
         inlineData: {
           mimeType: 'application/pdf',
@@ -88,25 +107,48 @@ Output MUST strictly be valid JSON matching this schema:
         },
       });
       contents.push({
-        text: `Please analyze this course syllabus PDF (${filename || 'syllabus.pdf'}) and extract all course details, grading criteria, and deadlines according to the instructions.`,
+        text: `Please analyze this course syllabus PDF (${filename}) and extract all course details, grading criteria, and deadlines according to the instructions.`,
       });
-    } else {
+    } else if (textContent) {
       contents.push({
-        text: `Please analyze this course syllabus text (${filename || 'syllabus'}):\n\n${textContent}`,
+        text: `Please analyze this course syllabus text (${filename}):\n\n${textContent}`,
+      });
+    } else if (pdfBase64) {
+      // Fallback for other file types with base64
+      contents.push({
+        text: `Please analyze this course syllabus (${filename}) provided as base64 content.`,
       });
     }
 
-    // Call Gemini with structured output
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents,
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: 'application/json',
-      },
-    });
+    // Call Gemini with structured output, trying active models
+    const modelsToTry = ['gemini-3.8-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'];
+    let lastError: any = null;
+    let responseText = '';
 
-    const responseText = response.text?.trim() || '{}';
+    for (const model of modelsToTry) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents,
+          config: {
+            systemInstruction: systemPrompt,
+            responseMimeType: 'application/json',
+          },
+        });
+        responseText = response.text?.trim() || '{}';
+        if (responseText && responseText !== '{}') {
+          break;
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`Model ${model} failed, trying next model:`, err.message || err);
+      }
+    }
+
+    if (!responseText || responseText === '{}') {
+      throw lastError || new Error('No response generated from Gemini models');
+    }
+
     let parsedJson: any;
 
     try {

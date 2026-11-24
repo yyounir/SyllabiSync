@@ -23,6 +23,7 @@ import {
 import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
 import { Badge, TypeBadge } from '@/components/common/Badge';
+import { Input } from '@/components/common/Input';
 import { EmptyState } from '@/components/common/EmptyState';
 import { Colors } from '@/constants/colors';
 import { Spacing, Typography, BorderRadius, MaxContentWidth } from '@/constants/theme';
@@ -33,6 +34,7 @@ import {
   Circle,
   Clock,
   ExternalLink,
+  Mail,
   RefreshCw,
   X,
 } from 'lucide-react-native';
@@ -51,6 +53,11 @@ export default function CalendarScreen() {
   const [syncing, setSyncing] = useState(false);
   const [syncSuccessMessage, setSyncSuccessMessage] = useState<string | null>(null);
 
+  // Connect Google Modal State
+  const [connectModalVisible, setConnectModalVisible] = useState(false);
+  const [googleEmailInput, setGoogleEmailInput] = useState(user?.email || 'student@gmail.com');
+  const [connecting, setConnecting] = useState(false);
+
   // Filters
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
   const [selectedType, setSelectedType] = useState<string>('all');
@@ -59,13 +66,14 @@ export default function CalendarScreen() {
   // Selected Item Modal
   const [activeItem, setActiveItem] = useState<AcademicItem | null>(null);
 
+  const currentUserId = user?.id || 'guest_student';
+
   const loadData = useCallback(async () => {
-    if (!user) return;
     try {
       const [itemsRes, classesRes, connRes] = await Promise.all([
-        academicItemService.getItems(user.id),
-        classService.getClasses(user.id),
-        googleCalendarService.getConnection(user.id),
+        academicItemService.getItems(currentUserId),
+        classService.getClasses(currentUserId),
+        googleCalendarService.getConnection(currentUserId),
       ]);
 
       if (itemsRes.data) setItems(itemsRes.data);
@@ -77,7 +85,7 @@ export default function CalendarScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user]);
+  }, [currentUserId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -100,33 +108,70 @@ export default function CalendarScreen() {
     loadData();
   };
 
+  const handleOpenConnectModal = () => {
+    setGoogleEmailInput(user?.email || 'student@gmail.com');
+    setConnectModalVisible(true);
+  };
+
+  const handleConfirmGoogleConnect = async () => {
+    if (!googleEmailInput.trim()) return;
+    setConnecting(true);
+
+    const { data: newConn } = await googleCalendarService.saveConnection(
+      currentUserId,
+      googleEmailInput.trim()
+    );
+
+    if (newConn) {
+      setConnection(newConn);
+      setSyncSuccessMessage(`Connected to Google Calendar as ${newConn.google_email}`);
+    }
+
+    setConnecting(false);
+    setConnectModalVisible(false);
+
+    // Auto-sync items right after connecting
+    if (items.length > 0) {
+      handleSyncGoogleCalendar();
+    }
+  };
+
+  const handleDisconnectCalendar = async () => {
+    await googleCalendarService.disconnect(currentUserId);
+    setConnection(null);
+    setSyncSuccessMessage('Disconnected from Google Calendar');
+    setTimeout(() => setSyncSuccessMessage(null), 3000);
+  };
+
   const handleSyncGoogleCalendar = async () => {
-    if (!user) return;
+    if (!connection) {
+      handleOpenConnectModal();
+      return;
+    }
+
     setSyncing(true);
     setSyncSuccessMessage(null);
 
-    // If no existing connection, prompt to connect or save default demo account
-    if (!connection) {
-      await googleCalendarService.saveConnection(
-        user.id,
-        user.email || 'student@gmail.com'
-      );
-      const { data } = await googleCalendarService.getConnection(user.id);
-      if (data) setConnection(data);
-    }
+    // Optimistically update all items with due dates to 'synced'
+    setItems((prev) =>
+      prev.map((i) => (i.due_date ? { ...i, google_sync_status: 'synced' } : i))
+    );
 
     const { syncedCount } = await googleCalendarService.syncItemsToGoogleCalendar(
-      user.id,
+      currentUserId,
       items
     );
 
     setSyncing(false);
-    setSyncSuccessMessage(`Successfully synchronized ${syncedCount} events to Google Calendar!`);
+    setSyncSuccessMessage(
+      `Successfully synchronized ${syncedCount} academic deadlines to your Google Calendar!`
+    );
+
     loadData();
 
     setTimeout(() => {
       setSyncSuccessMessage(null);
-    }, 4000);
+    }, 4500);
   };
 
   // Filter items
@@ -156,8 +201,20 @@ export default function CalendarScreen() {
           </View>
 
           <Button
-            title={syncing ? 'Syncing...' : 'Sync to Google Calendar'}
-            icon={<RefreshCw size={15} color="#FFFFFF" />}
+            title={
+              syncing
+                ? 'Syncing...'
+                : connection
+                ? 'Sync to Google Calendar'
+                : 'Connect Google Calendar'
+            }
+            icon={
+              connection ? (
+                <RefreshCw size={15} color="#FFFFFF" />
+              ) : (
+                <CalendarIcon size={15} color="#FFFFFF" />
+              )
+            }
             loading={syncing}
             onPress={handleSyncGoogleCalendar}
           />
@@ -173,26 +230,44 @@ export default function CalendarScreen() {
               <View style={styles.syncStatusRow}>
                 <Text style={styles.syncTitle}>Google Calendar Integration</Text>
                 <Badge
-                  label={connection ? 'Connected' : 'Ready to Connect'}
+                  label={connection ? 'Connected' : 'Not Connected'}
                   variant={connection ? 'success' : 'default'}
                 />
               </View>
               <Text style={styles.syncEmail}>
                 {connection
-                  ? `Connected: ${connection.google_email} • Last synced: ${
+                  ? `Active: ${connection.google_email} • Last synced: ${
                       connection.last_synced_at
                         ? new Date(connection.last_synced_at).toLocaleTimeString()
                         : 'Just now'
                     }`
-                  : 'Connect your Google account to automatically export syllabus deadlines.'}
+                  : 'Connect your Google account to automatically push syllabus deadlines to your personal calendar.'}
               </Text>
             </View>
-            <Button
-              title={connection ? 'Sync Now' : 'Connect'}
-              variant="outline"
-              size="sm"
-              onPress={handleSyncGoogleCalendar}
-            />
+            <View style={styles.syncActionButtons}>
+              {connection ? (
+                <>
+                  <Button
+                    title="Sync Now"
+                    size="sm"
+                    loading={syncing}
+                    onPress={handleSyncGoogleCalendar}
+                  />
+                  <Button
+                    title="Disconnect"
+                    variant="outline"
+                    size="sm"
+                    onPress={handleDisconnectCalendar}
+                  />
+                </>
+              ) : (
+                <Button
+                  title="Connect"
+                  size="sm"
+                  onPress={handleOpenConnectModal}
+                />
+              )}
+            </View>
           </View>
 
           {syncSuccessMessage && (
@@ -415,6 +490,70 @@ export default function CalendarScreen() {
           </View>
         )}
 
+        {/* Connect Google Calendar Modal */}
+        <Modal
+          visible={connectModalVisible}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setConnectModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <Card style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <View style={styles.modalHeaderBrand}>
+                  <CalendarIcon size={22} color={Colors.light.primary} />
+                  <Text style={styles.modalTitle}>Connect Google Calendar</Text>
+                </View>
+                <Pressable onPress={() => setConnectModalVisible(false)}>
+                  <X size={20} color={Colors.light.textSecondary} />
+                </Pressable>
+              </View>
+
+              <Text style={styles.modalSubtitle}>
+                Authorize SyllabiSync to synchronize academic assignments, exam dates, and
+                project milestones with your Google Calendar.
+              </Text>
+
+              <Input
+                label="Google Account Email"
+                placeholder="your.email@gmail.com"
+                value={googleEmailInput}
+                onChangeText={setGoogleEmailInput}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                leftIcon={<Mail size={16} color={Colors.light.textMuted} />}
+              />
+
+              <View style={styles.permissionsBox}>
+                <Text style={styles.permissionsTitle}>Permissions requested:</Text>
+                <Text style={styles.permissionsItem}>
+                  ✓ Create syllabus deadlines in your primary calendar
+                </Text>
+                <Text style={styles.permissionsItem}>
+                  ✓ Update deadlines when dates change in SyllabiSync
+                </Text>
+                <Text style={styles.permissionsItem}>
+                  ✓ Distinguish all-day deadlines from timed exams
+                </Text>
+              </View>
+
+              <View style={styles.modalActions}>
+                <Button
+                  title="Cancel"
+                  variant="outline"
+                  onPress={() => setConnectModalVisible(false)}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  title="Connect & Authorize"
+                  loading={connecting}
+                  onPress={handleConfirmGoogleConnect}
+                  style={{ flex: 1.5 }}
+                />
+              </View>
+            </Card>
+          </View>
+        </Modal>
+
         {/* Event Detail Modal */}
         {activeItem && (
           <Modal
@@ -543,6 +682,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
+    flexWrap: 'wrap',
   },
   syncIconBox: {
     width: 44,
@@ -554,6 +694,7 @@ const styles = StyleSheet.create({
   },
   syncTextBox: {
     flex: 1,
+    minWidth: 200,
   },
   syncStatusRow: {
     flexDirection: 'row',
@@ -569,6 +710,10 @@ const styles = StyleSheet.create({
     ...Typography.xs,
     color: Colors.light.textSecondary,
     marginTop: 2,
+  },
+  syncActionButtons: {
+    flexDirection: 'row',
+    gap: Spacing.two,
   },
   successBanner: {
     flexDirection: 'row',
@@ -772,6 +917,39 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: Spacing.two,
+  },
+  modalHeaderBrand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  modalTitle: {
+    ...Typography.lg,
+    fontWeight: '800',
+    color: Colors.light.text,
+  },
+  modalSubtitle: {
+    ...Typography.sm,
+    color: Colors.light.textSecondary,
+    lineHeight: 20,
+    marginBottom: Spacing.four,
+  },
+  permissionsBox: {
+    backgroundColor: Colors.light.backgroundElement,
+    padding: Spacing.three,
+    borderRadius: BorderRadius.md,
+    gap: 4,
+    marginBottom: Spacing.four,
+  },
+  permissionsTitle: {
+    ...Typography.xs,
+    fontWeight: '700',
+    color: Colors.light.text,
+    marginBottom: 2,
+  },
+  permissionsItem: {
+    ...Typography.xs,
+    color: Colors.light.textSecondary,
   },
   modalCourseRow: {
     flexDirection: 'row',
