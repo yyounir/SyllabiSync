@@ -5,12 +5,12 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  useWindowDimensions,
   Pressable,
   Modal,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsDesktop } from '@/hooks/useResponsive';
 import { academicItemService } from '@/services/academic-item.service';
 import { classService } from '@/services/class.service';
 import { googleCalendarService } from '@/services/google-calendar.service';
@@ -42,8 +42,7 @@ import { format, isPast, parseISO } from 'date-fns';
 
 export default function CalendarScreen() {
   const { user } = useAuth();
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= 768;
+  const isDesktop = useIsDesktop();
 
   const [items, setItems] = useState<AcademicItem[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -585,7 +584,7 @@ export default function CalendarScreen() {
                   <CalendarIcon size={16} color={Colors.light.textMuted} />
                   <Text style={styles.modalInfoText}>
                     {activeItem.due_date
-                      ? new Date(activeItem.due_date).toLocaleString()
+                      ? format(new Date(activeItem.due_date), 'MMM d, yyyy h:mm a')
                       : activeItem.original_date_text || 'No date set'}
                   </Text>
                 </View>

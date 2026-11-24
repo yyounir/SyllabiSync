@@ -125,7 +125,7 @@ export const googleCalendarService = {
             summary: `[${item.course_code || 'SyllabiSync'}] ${item.title}`,
             description: `${item.description || ''}\n\nCategory: ${item.type}\nCourse: ${
               item.course_name || ''
-            }\nSource: SyllabiSync AI Syllabus Sync`,
+            }\nSource: SyllabiSync Syllabus Sync`,
           };
 
           if (isAllDay) {

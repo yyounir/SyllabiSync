@@ -5,11 +5,11 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  useWindowDimensions,
   TextInput,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsDesktop } from '@/hooks/useResponsive';
 import { classService } from '@/services/class.service';
 import { academicItemService } from '@/services/academic-item.service';
 import { ClassItem, AcademicItem } from '@/types/database';
@@ -22,8 +22,7 @@ import { BookOpen, Plus, Search, Upload } from 'lucide-react-native';
 
 export default function ClassesScreen() {
   const { user } = useAuth();
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= 768;
+  const isDesktop = useIsDesktop();
 
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [items, setItems] = useState<AcademicItem[]>([]);
@@ -32,11 +31,11 @@ export default function ClassesScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const loadClasses = useCallback(async () => {
-    if (!user) return;
+    const effectiveUserId = user?.id || 'guest_student';
     try {
       const [classRes, itemsRes] = await Promise.all([
-        classService.getClasses(user.id),
-        academicItemService.getItems(user.id),
+        classService.getClasses(effectiveUserId),
+        academicItemService.getItems(effectiveUserId),
       ]);
 
       if (classRes.data) setClasses(classRes.data);

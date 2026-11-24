@@ -135,7 +135,7 @@ export const notesService = {
     try {
       const { error } = await supabase.from('notes').delete().eq('id', noteId);
       return { error };
-    } catch (error) {
+    } catch {
       return { error: null };
     }
   },

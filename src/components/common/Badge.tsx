@@ -77,7 +77,7 @@ export function Badge({ label, variant = 'default', color, size = 'sm', style }:
 
 export function TypeBadge({ type }: { type: AcademicItemType }) {
   const map: Record<AcademicItemType, { label: string; color: string }> = {
-    assignment: { label: 'Assignment', color: '#6366F1' },
+    assignment: { label: 'Assignment', color: '#274f73' },
     exam: { label: 'Exam', color: '#EF4444' },
     quiz: { label: 'Quiz', color: '#F59E0B' },
     project: { label: 'Project', color: '#8B5CF6' },

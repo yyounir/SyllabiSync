@@ -4,13 +4,14 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  useWindowDimensions,
   Switch,
   Modal,
   Pressable,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsDesktop } from '@/hooks/useResponsive';
+import { format } from 'date-fns';
 import { googleCalendarService } from '@/services/google-calendar.service';
 import { classService } from '@/services/class.service';
 import { academicItemService } from '@/services/academic-item.service';
@@ -22,7 +23,6 @@ import { Input } from '@/components/common/Input';
 import { Colors } from '@/constants/colors';
 import { Spacing, Typography, BorderRadius, MaxContentWidth } from '@/constants/theme';
 import {
-  BookOpen,
   Calendar,
   CheckCircle2,
   LogOut,
@@ -31,11 +31,11 @@ import {
   User,
   X,
 } from 'lucide-react-native';
+import { Logo } from '@/components/common/Logo';
 
 export default function SettingsScreen() {
   const { user, profile, signOut } = useAuth();
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= 768;
+  const isDesktop = useIsDesktop();
 
   const [connection, setConnection] = useState<GoogleCalendarConnection | null>(null);
   const [autoSync, setAutoSync] = useState(true);
@@ -199,7 +199,7 @@ export default function SettingsScreen() {
                 <Text style={styles.detailLabel}>Last Sync Timestamp</Text>
                 <Text style={styles.detailValue}>
                   {connection.last_synced_at
-                    ? new Date(connection.last_synced_at).toLocaleString()
+                    ? format(new Date(connection.last_synced_at), 'MMM d, yyyy h:mm a')
                     : 'Not synced yet'}
                 </Text>
               </View>
@@ -265,11 +265,8 @@ export default function SettingsScreen() {
         {/* App Info & Sign out */}
         <Card style={styles.card}>
           <View style={styles.appInfoRow}>
-            <View style={styles.appIconCircle}>
-              <BookOpen size={20} color="#FFFFFF" />
-            </View>
             <View>
-              <Text style={styles.appName}>SyllabiSync</Text>
+              <Logo width={210} containerStyle={{ alignItems: 'flex-start', marginBottom: Spacing.two }} />
               <Text style={styles.appTagline}>
                 Your syllabus. Your semester. In sync.
               </Text>

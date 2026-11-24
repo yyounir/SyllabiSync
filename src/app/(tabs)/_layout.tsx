@@ -1,7 +1,8 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { useWindowDimensions, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import { ResponsiveShell } from '@/components/layout/ResponsiveShell';
+import { useIsDesktop } from '@/hooks/useResponsive';
 import { Colors } from '@/constants/colors';
 import {
   LayoutDashboard,
@@ -11,8 +12,7 @@ import {
 } from 'lucide-react-native';
 
 export default function TabsLayout() {
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= 768;
+  const isDesktop = useIsDesktop();
 
   return (
     <ResponsiveShell>

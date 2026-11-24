@@ -1,8 +1,8 @@
 import { Platform } from 'react-native';
 import * as LegacyFileSystem from 'expo-file-system/legacy';
 import { File as ModernFile } from 'expo-file-system';
-import { GoogleGenAI } from '@google/genai';
-import { ExtractedSyllabus, ExtractedSyllabusSchema } from '@/types/academic';
+import { ExtractedSyllabus } from '@/types/academic';
+import { analyzeSyllabusProgrammatic } from '@/lib/syllabusEngine';
 import { syllabusService } from './syllabus.service';
 
 export interface SelectedFile {
@@ -14,7 +14,7 @@ export interface SelectedFile {
   base64?: string | null;
 }
 
-export const aiSyllabusService = {
+export const syllabusExtractionService = {
   isDocxFile(filename: string, mimeType?: string): boolean {
     const lower = filename.toLowerCase();
     return (
@@ -45,7 +45,7 @@ export const aiSyllabusService = {
       }
     }
 
-    // Method 2: expo-file-system/legacy (the recommended migration path for readAsStringAsync)
+    // Method 2: expo-file-system/legacy
     if (file.uri) {
       try {
         if (typeof LegacyFileSystem.readAsStringAsync === 'function') {
@@ -146,73 +146,39 @@ export const aiSyllabusService = {
             return { data: result.data, storagePath, error: null };
           }
         } else {
-          console.warn(`Server API route returned ${response.status}, attempting direct AI fallback...`);
+          const errData = await response.json().catch(() => null);
+          if (errData?.isScanned) {
+            throw new Error(errData.error || 'Scanned document detected. OCR is required.');
+          }
+          console.warn(
+            `Server API route returned ${response.status}, using in-app extraction engine...`
+          );
         }
-      } catch (netErr) {
-        console.warn('Network to /api/analyze-syllabus failed, attempting direct AI fallback:', netErr);
-      }
-
-      // 4. Client-side direct Gemini fallback (in case server API route is unreachable or on native)
-      const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error(
-          'EXPO_PUBLIC_GEMINI_API_KEY is not configured. Please ensure EXPO_PUBLIC_GEMINI_API_KEY is in your .env file and restart Expo with npx expo start -c'
+      } catch (netErr: any) {
+        if (netErr?.message && (netErr.message.includes('OCR') || netErr.message.includes('scanned'))) {
+          throw netErr;
+        }
+        console.warn(
+          'Network to /api/analyze-syllabus unavailable, using in-app extraction engine:',
+          netErr?.message || netErr
         );
       }
 
-      const ai = new GoogleGenAI({ apiKey });
-      const systemPrompt = `Extract structured syllabus details: course_name, course_code, professor_name, professor_email, semester, description, office_hours, attendance_policy, late_policy, grading_breakdown: [{category, weight}], required_textbooks: [string], items: [{title, description, type, due_date, original_date_text, points, confidence, source_excerpt, is_tentative}].
-CRITICAL: Never invent dates or policies. Return valid JSON only.`;
+      // 4. In-App Programmatic Extraction Engine Fallback
+      // Completely programmatic: uses pdfjs-dist, chrono-node, compromise, date-fns, and Zod
+      const programmaticResult = await analyzeSyllabusProgrammatic({
+        pdfBase64: base64,
+        filename: file.name,
+        fileType: isDocx ? 'docx' : 'pdf',
+      });
 
-      const contents: any[] = [];
-      if (!isDocx) {
-        contents.push({
-          inlineData: {
-            mimeType: 'application/pdf',
-            data: base64,
-          },
-        });
-        contents.push({
-          text: `Extract all assignments, exams, and grading policies from this course syllabus (${file.name}).`,
-        });
-      } else {
-        contents.push({
-          text: `Extract all assignments, exams, and grading policies from this Word document course syllabus (${file.name}).`,
-        });
-      }
-
-      let responseText = '';
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          const res = await ai.models.generateContent({
-            model: 'gemini-3.8-flash',
-            contents,
-            config: {
-              systemInstruction: systemPrompt,
-              responseMimeType: 'application/json',
-            },
-          });
-          responseText = res.text?.trim() || '';
-          if (responseText) break;
-        } catch (modelErr: any) {
-          console.warn(`Direct Gemini attempt ${attempt} warning:`, modelErr);
-          if (attempt < 3) {
-            await new Promise((resolve) => setTimeout(resolve, 1200));
-          }
-        }
-      }
-
-      if (!responseText) {
-        throw new Error('Gemini could not generate content from the document');
-      }
-
-      const parsed = JSON.parse(responseText);
-      const validated = ExtractedSyllabusSchema.safeParse(parsed);
-      const finalData = validated.success ? validated.data : (parsed as ExtractedSyllabus);
-
-      return { data: finalData, storagePath, error: null };
+      return {
+        data: programmaticResult.data,
+        storagePath,
+        error: null,
+      };
     } catch (error: any) {
-      console.error('aiSyllabusService.analyzeSyllabus error:', error);
+      console.error('syllabusExtractionService.analyzeSyllabus error:', error);
       return { data: null, storagePath: null, error };
     }
   },
@@ -223,7 +189,7 @@ CRITICAL: Never invent dates or policies. Return valid JSON only.`;
       {
         name: 'CS 350: Operating Systems & Systems Programming',
         courseCode: 'CS 350',
-        text: `CS 350: Operating Systems
+        text: `CS 350: Operating Systems & Systems Programming
 Instructor: Dr. Sarah Chen (schen@university.edu)
 Office Hours: Tuesdays & Thursdays 2:00 PM - 4:00 PM, Turing Hall Room 402
 Semester: Fall 2026
@@ -286,3 +252,6 @@ Schedule:
     ];
   },
 };
+
+// Backwards-compatible alias for existing imports
+export const aiSyllabusService = syllabusExtractionService;

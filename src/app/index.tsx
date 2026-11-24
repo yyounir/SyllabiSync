@@ -4,7 +4,8 @@ import { router } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import { Colors } from '@/constants/colors';
 import { Typography, Spacing } from '@/constants/theme';
-import { BookOpen, Sparkles } from 'lucide-react-native';
+import { Sparkles } from 'lucide-react-native';
+import { Logo } from '@/components/common/Logo';
 
 export default function IndexScreen() {
   const { user, loading } = useAuth();
@@ -21,10 +22,7 @@ export default function IndexScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.logoBox}>
-        <BookOpen size={36} color="#FFFFFF" strokeWidth={2.2} />
-      </View>
-      <Text style={styles.brandTitle}>SyllabiSync</Text>
+      <Logo width={290} containerStyle={styles.logoContainer} />
       <View style={styles.taglineBadge}>
         <Sparkles size={13} color={Colors.light.primary} />
         <Text style={styles.taglineText}>Your syllabus. Your semester. In sync.</Text>
@@ -46,20 +44,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: Spacing.four,
   },
-  logoBox: {
-    width: 68,
-    height: 68,
-    borderRadius: 20,
-    backgroundColor: Colors.light.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+  logoContainer: {
     marginBottom: Spacing.three,
-  },
-  brandTitle: {
-    ...Typography['2xl'],
-    fontWeight: '800',
-    color: Colors.light.text,
-    letterSpacing: -0.5,
   },
   taglineBadge: {
     flexDirection: 'row',

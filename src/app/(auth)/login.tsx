@@ -15,7 +15,8 @@ import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
 import { Colors } from '@/constants/colors';
 import { Spacing, Typography, BorderRadius } from '@/constants/theme';
-import { BookOpen, Lock, Mail, Sparkles } from 'lucide-react-native';
+import { Lock, Mail, Sparkles } from 'lucide-react-native';
+import { Logo } from '@/components/common/Logo';
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
@@ -53,10 +54,7 @@ export default function LoginScreen() {
         <View style={styles.container}>
           {/* Brand Header */}
           <View style={styles.brandContainer}>
-            <View style={styles.logoIcon}>
-              <BookOpen size={30} color="#FFFFFF" strokeWidth={2.2} />
-            </View>
-            <Text style={styles.brandTitle}>SyllabiSync</Text>
+            <Logo width={270} containerStyle={styles.logoWrapper} />
             <View style={styles.taglineBadge}>
               <Sparkles size={13} color={Colors.light.primary} />
               <Text style={styles.taglineText}>Your syllabus. Your semester. In sync.</Text>
@@ -136,24 +134,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.six,
   },
-  logoIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 18,
-    backgroundColor: Colors.light.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+  logoWrapper: {
     marginBottom: Spacing.three,
-    ...Platform.select({
-      web: { boxShadow: '0 8px 16px -4px rgba(99, 102, 241, 0.35)' },
-      default: {
-        shadowColor: Colors.light.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 4,
-      },
-    }),
   },
   brandTitle: {
     ...Typography['2xl'],

@@ -8,10 +8,10 @@ export const Colors = {
     textSecondary: '#64748B',
     textMuted: '#94A3B8',
     border: '#E2E8F0',
-    primary: '#6366F1',
-    primaryHover: '#4F46E5',
-    primaryLight: '#EEF2FF',
-    secondary: '#818CF8',
+    primary: '#274f73',
+    primaryHover: '#1d3d5a',
+    primaryLight: '#EAF1F7',
+    secondary: '#3b6d9c',
     success: '#22C55E',
     successLight: '#F0FDF4',
     warning: '#F59E0B',
@@ -28,10 +28,10 @@ export const Colors = {
     textSecondary: '#94A3B8',
     textMuted: '#64748B',
     border: '#273449',
-    primary: '#6366F1',
-    primaryHover: '#818CF8',
-    primaryLight: '#1E1B4B',
-    secondary: '#818CF8',
+    primary: '#3b74a8',
+    primaryHover: '#4e87be',
+    primaryLight: '#14283b',
+    secondary: '#5c92c4',
     success: '#22C55E',
     successLight: '#052E16',
     warning: '#F59E0B',
@@ -45,7 +45,7 @@ export type ThemeType = 'light' | 'dark';
 export type ThemeColors = typeof Colors.light;
 
 export const CLASS_COLORS = [
-  '#6366F1', // Indigo
+  '#274f73', // Navy Slate
   '#3B82F6', // Blue
   '#0EA5E9', // Sky
   '#10B981', // Emerald

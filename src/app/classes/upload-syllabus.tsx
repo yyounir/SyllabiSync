@@ -11,6 +11,7 @@ import { router } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import { useAuth } from '@/hooks/useAuth';
 import { aiSyllabusService, SelectedFile } from '@/services/ai-syllabus.service';
+import { analyzeSyllabusProgrammatic } from '@/lib/syllabusEngine';
 import { reviewStore } from '@/hooks/useReviewData';
 import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
@@ -107,12 +108,12 @@ export default function UploadSyllabusScreen() {
       );
 
       setProgress(60);
-      setStepMessage('Sending syllabus to Google Gemini AI (gemini-3.8-flash)...');
+      setStepMessage('Extracting course structure, dates, and grading policies...');
 
       const result = await aiSyllabusService.analyzeSyllabus(currentUserId, selectedFile);
 
       if (result.error) {
-        throw new Error(result.error.message || 'Gemini syllabus analysis failed');
+        throw new Error(result.error.message || 'Syllabus analysis failed');
       }
 
       if (!result.data) {
@@ -133,7 +134,8 @@ export default function UploadSyllabusScreen() {
       setStepMessage('Complete! Opening review editor...');
 
       setTimeout(() => {
-        router.push('/classes/review-syllabus');
+        setProcessing(false);
+        router.replace('/classes/review-syllabus');
       }, 400);
     } catch (err: any) {
       console.error('Syllabus analysis failed:', err);
@@ -152,21 +154,37 @@ export default function UploadSyllabusScreen() {
     setStepMessage(`Analyzing sample syllabus: ${demo.courseCode}...`);
 
     try {
-      const response = await fetch('/api/analyze-syllabus', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          textContent: demo.text,
-          filename: `${demo.courseCode}_Syllabus.txt`,
-        }),
-      });
+      let extractedData: any = null;
 
-      if (!response.ok) {
-        throw new Error('Demo analysis request failed');
+      try {
+        const response = await fetch('/api/analyze-syllabus', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            textContent: demo.text,
+            filename: `${demo.courseCode}_Syllabus.txt`,
+          }),
+        });
+
+        if (response.ok) {
+          const res = await response.json();
+          if (res.success && res.data) {
+            extractedData = res.data;
+          }
+        }
+      } catch (netErr) {
+        console.warn('Backend API fetch for demo failed, running programmatic engine directly:', netErr);
       }
 
-      const res = await response.json();
-      if (!res.success || !res.data) {
+      if (!extractedData) {
+        const engineRes = await analyzeSyllabusProgrammatic({
+          textContent: demo.text,
+          filename: `${demo.courseCode}_Syllabus.txt`,
+        });
+        extractedData = engineRes.data;
+      }
+
+      if (!extractedData) {
         throw new Error('Failed to parse demo syllabus');
       }
 
@@ -174,13 +192,14 @@ export default function UploadSyllabusScreen() {
       setStepMessage('Complete! Opening review editor...');
 
       reviewStore.setPendingData({
-        extractedData: res.data,
+        extractedData: extractedData,
         originalFilename: `${demo.courseCode}_Syllabus.pdf`,
         storagePath: null,
       });
 
       setTimeout(() => {
-        router.push('/classes/review-syllabus');
+        setProcessing(false);
+        router.replace('/classes/review-syllabus');
       }, 400);
     } catch (err: any) {
       console.error('Demo syllabus failed:', err);
@@ -201,22 +220,22 @@ export default function UploadSyllabusScreen() {
       <View style={styles.content}>
         {/* Back navigation */}
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => router.replace('/(tabs)/dashboard')}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
           <ArrowLeft size={18} color={Colors.light.text} />
-          <Text style={styles.backBtnText}>Back</Text>
+          <Text style={styles.backBtnText}>Dashboard</Text>
         </Pressable>
 
         {/* Title */}
         <View style={styles.titleSection}>
           <View style={styles.taglineBadge}>
             <Sparkles size={14} color={Colors.light.primary} />
-            <Text style={styles.taglineText}>Powered by Google Gemini 3.8 Flash</Text>
+            <Text style={styles.taglineText}>SyllabiSync Extraction Engine</Text>
           </View>
           <Text style={styles.pageTitle}>Upload Course Syllabus</Text>
           <Text style={styles.pageSubtitle}>
-            Upload a syllabus PDF or Word document (.docx) and let Gemini extract your
-            assignments, exams, grading weights, and semester schedule automatically.
+            Upload a syllabus PDF or Word document (.docx) to automatically extract your
+            assignments, exams, grading weights, and semester schedule programmatically.
           </Text>
         </View>
 
@@ -280,7 +299,7 @@ export default function UploadSyllabusScreen() {
 
               {selectedFile && (
                 <Button
-                  title="Extract with Gemini AI"
+                  title="Extract with SyllabiSync Engine"
                   icon={<Sparkles size={16} color="#FFFFFF" />}
                   onPress={handleStartAnalysis}
                   style={styles.analyzeButton}

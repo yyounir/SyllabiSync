@@ -5,12 +5,13 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  useWindowDimensions,
   Pressable,
   Modal,
 } from 'react-native';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsDesktop } from '@/hooks/useResponsive';
+import { format } from 'date-fns';
 import { classService } from '@/services/class.service';
 import { academicItemService } from '@/services/academic-item.service';
 import { notesService } from '@/services/notes.service';
@@ -35,6 +36,8 @@ import {
   Calendar,
   CheckCircle2,
   Clock,
+  Edit2,
+  Edit3,
   FileText,
   GraduationCap,
   Info,
@@ -43,6 +46,7 @@ import {
   Trash2,
   Upload,
   User,
+  X,
 } from 'lucide-react-native';
 
 type TabKey = 'overview' | 'assignments' | 'exams' | 'policies' | 'notes';
@@ -50,8 +54,7 @@ type TabKey = 'overview' | 'assignments' | 'exams' | 'policies' | 'notes';
 export default function ClassDashboardScreen() {
   const { classId } = useLocalSearchParams<{ classId: string }>();
   const { user } = useAuth();
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= 768;
+  const isDesktop = useIsDesktop();
 
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [classData, setClassData] = useState<ClassItem | null>(null);
@@ -60,26 +63,79 @@ export default function ClassDashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // ==========================================
+  // Course Info Edit Modal State
+  // ==========================================
+  const [courseInfoModalVisible, setCourseInfoModalVisible] = useState(false);
+  const [editDescription, setEditDescription] = useState('');
+  const [editOfficeHours, setEditOfficeHours] = useState('');
+  const [editAttendancePolicy, setEditAttendancePolicy] = useState('');
+  const [editLatePolicy, setEditLatePolicy] = useState('');
+  const [savingCourseInfo, setSavingCourseInfo] = useState(false);
+
+  // ==========================================
   // Task Creation Modal State
+  // ==========================================
   const [taskModalVisible, setTaskModalVisible] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskDescription, setNewTaskDescription] = useState('');
   const [newTaskType, setNewTaskType] = useState<AcademicItemType>('assignment');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
   const [newTaskPoints, setNewTaskPoints] = useState('');
   const [creatingTask, setCreatingTask] = useState(false);
 
+  // ==========================================
+  // Task Edit Modal State
+  // ==========================================
+  const [editTaskModalVisible, setEditTaskModalVisible] = useState(false);
+  const [editingTask, setEditingTask] = useState<AcademicItem | null>(null);
+  const [editTaskTitle, setEditTaskTitle] = useState('');
+  const [editTaskDescription, setEditTaskDescription] = useState('');
+  const [editTaskType, setEditTaskType] = useState<AcademicItemType>('assignment');
+  const [editTaskDueDate, setEditTaskDueDate] = useState('');
+  const [editTaskPoints, setEditTaskPoints] = useState('');
+  const [editTaskStatus, setEditTaskStatus] = useState<AcademicItemStatus>('pending');
+  const [savingTask, setSavingTask] = useState(false);
+
+  // ==========================================
+  // Exam Creation Modal State
+  // ==========================================
+  const [examModalVisible, setExamModalVisible] = useState(false);
+  const [newExamTitle, setNewExamTitle] = useState('');
+  const [newExamDescription, setNewExamDescription] = useState('');
+  const [newExamType, setNewExamType] = useState<'exam' | 'quiz'>('exam');
+  const [newExamDate, setNewExamDate] = useState('');
+  const [newExamPoints, setNewExamPoints] = useState('');
+  const [creatingExam, setCreatingExam] = useState(false);
+
+  // ==========================================
+  // Exam Edit Modal State
+  // ==========================================
+  const [editExamModalVisible, setEditExamModalVisible] = useState(false);
+  const [editingExam, setEditingExam] = useState<AcademicItem | null>(null);
+  const [editExamTitle, setEditExamTitle] = useState('');
+  const [editExamDescription, setEditExamDescription] = useState('');
+  const [editExamType, setEditExamType] = useState<'exam' | 'quiz'>('exam');
+  const [editExamDate, setEditExamDate] = useState('');
+  const [editExamPoints, setEditExamPoints] = useState('');
+  const [editExamStatus, setEditExamStatus] = useState<AcademicItemStatus>('pending');
+  const [savingExam, setSavingExam] = useState(false);
+
+  // ==========================================
   // Note Creation Modal State
+  // ==========================================
   const [noteModalVisible, setNoteModalVisible] = useState(false);
   const [newNoteTitle, setNewNoteTitle] = useState('');
   const [newNoteContent, setNewNoteContent] = useState('');
   const [creatingNote, setCreatingNote] = useState(false);
 
   const loadData = useCallback(async () => {
-    if (!classId || !user) return;
+    if (!classId) return;
+    const effectiveUserId = user?.id || 'guest_student';
     try {
       const [classRes, itemsRes, notesRes] = await Promise.all([
         classService.getClassById(classId),
-        academicItemService.getItems(user.id, { classId }),
+        academicItemService.getItems(effectiveUserId, { classId }),
         notesService.getNotes(classId),
       ]);
 
@@ -105,6 +161,41 @@ export default function ClassDashboardScreen() {
     loadData();
   };
 
+  // ==========================================
+  // Course Info Handlers
+  // ==========================================
+  const handleOpenEditCourseInfo = () => {
+    setEditDescription(classData?.description || '');
+    setEditOfficeHours(classData?.office_hours || '');
+    setEditAttendancePolicy(classData?.attendance_policy || '');
+    setEditLatePolicy(classData?.late_policy || '');
+    setCourseInfoModalVisible(true);
+  };
+
+  const handleSaveCourseInfo = async () => {
+    if (!classId) return;
+    setSavingCourseInfo(true);
+    try {
+      const updates = {
+        description: editDescription.trim(),
+        office_hours: editOfficeHours.trim() || null,
+        attendance_policy: editAttendancePolicy.trim() || null,
+        late_policy: editLatePolicy.trim() || null,
+      };
+
+      await classService.updateClass(classId, updates);
+      setClassData((prev) => (prev ? { ...prev, ...updates } : null));
+      setCourseInfoModalVisible(false);
+    } catch (err) {
+      console.error('Error saving course info:', err);
+    } finally {
+      setSavingCourseInfo(false);
+    }
+  };
+
+  // ==========================================
+  // Task Handlers
+  // ==========================================
   const handleToggleTaskStatus = async (itemId: string, currentStatus: AcademicItemStatus) => {
     const nextStatus: AcademicItemStatus =
       currentStatus === 'completed' ? 'pending' : 'completed';
@@ -116,17 +207,18 @@ export default function ClassDashboardScreen() {
   };
 
   const handleCreateTask = async () => {
-    if (!user || !classId || !newTaskTitle.trim()) return;
+    if (!classId || !newTaskTitle.trim()) return;
     setCreatingTask(true);
+    const effectiveUserId = user?.id || 'guest_student';
 
     const pointsNum = newTaskPoints ? parseFloat(newTaskPoints) : null;
     const dueIso = newTaskDueDate ? new Date(newTaskDueDate).toISOString() : null;
 
-    await academicItemService.createItem({
+    const { data: created } = await academicItemService.createItem({
       class_id: classId,
-      user_id: user.id,
+      user_id: effectiveUserId,
       title: newTaskTitle.trim(),
-      description: '',
+      description: newTaskDescription.trim(),
       type: newTaskType,
       due_date: dueIso,
       status: 'pending',
@@ -143,7 +235,12 @@ export default function ClassDashboardScreen() {
       google_sync_status: 'not_synced',
     });
 
+    if (created) {
+      setItems((prev) => [...prev, created]);
+    }
+
     setNewTaskTitle('');
+    setNewTaskDescription('');
     setNewTaskDueDate('');
     setNewTaskPoints('');
     setCreatingTask(false);
@@ -151,18 +248,171 @@ export default function ClassDashboardScreen() {
     loadData();
   };
 
+  const handleOpenEditTask = (task: AcademicItem) => {
+    setEditingTask(task);
+    setEditTaskTitle(task.title);
+    setEditTaskDescription(task.description || '');
+    setEditTaskType(task.type);
+    setEditTaskDueDate(
+      task.due_date ? task.due_date.split('T')[0] : task.original_date_text || ''
+    );
+    setEditTaskPoints(task.points ? String(task.points) : '');
+    setEditTaskStatus(task.status);
+    setEditTaskModalVisible(true);
+  };
+
+  const handleUpdateTask = async () => {
+    if (!editingTask || !editTaskTitle.trim()) return;
+    setSavingTask(true);
+
+    try {
+      const pointsNum = editTaskPoints ? parseFloat(editTaskPoints) : null;
+      const dueIso = editTaskDueDate ? new Date(editTaskDueDate).toISOString() : null;
+
+      const updates: Partial<AcademicItem> = {
+        title: editTaskTitle.trim(),
+        description: editTaskDescription.trim(),
+        type: editTaskType,
+        due_date: dueIso,
+        original_date_text: editTaskDueDate || null,
+        points: isNaN(pointsNum as number) ? null : pointsNum,
+        status: editTaskStatus,
+      };
+
+      await academicItemService.updateItem(editingTask.id, updates);
+      setItems((prev) =>
+        prev.map((i) => (i.id === editingTask.id ? { ...i, ...updates } : i))
+      );
+      setEditTaskModalVisible(false);
+      loadData();
+    } catch (err) {
+      console.error('Error updating task:', err);
+    } finally {
+      setSavingTask(false);
+    }
+  };
+
   const handleDeleteTask = async (itemId: string) => {
     setItems((prev) => prev.filter((i) => i.id !== itemId));
+    if (editTaskModalVisible && editingTask?.id === itemId) {
+      setEditTaskModalVisible(false);
+    }
     await academicItemService.deleteItem(itemId);
   };
 
+  // ==========================================
+  // Exam Handlers
+  // ==========================================
+  const handleCreateExam = async () => {
+    if (!classId || !newExamTitle.trim()) return;
+    setCreatingExam(true);
+    const effectiveUserId = user?.id || 'guest_student';
+
+    try {
+      const pointsNum = newExamPoints ? parseFloat(newExamPoints) : null;
+      const dueIso = newExamDate ? new Date(newExamDate).toISOString() : null;
+
+      const { data: created } = await academicItemService.createItem({
+        class_id: classId,
+        user_id: effectiveUserId,
+        title: newExamTitle.trim(),
+        description: newExamDescription.trim(),
+        type: newExamType,
+        due_date: dueIso,
+        status: 'pending',
+        priority: 'high',
+        points: isNaN(pointsNum as number) ? null : pointsNum,
+        grade: null,
+        source_excerpt: null,
+        original_date_text: newExamDate || null,
+        confidence: 1.0,
+        is_confirmed: true,
+        google_event_id: null,
+        google_calendar_id: null,
+        last_google_sync_at: null,
+        google_sync_status: 'not_synced',
+      });
+
+      if (created) {
+        setItems((prev) => [...prev, created]);
+      }
+
+      setNewExamTitle('');
+      setNewExamDescription('');
+      setNewExamDate('');
+      setNewExamPoints('');
+      setExamModalVisible(false);
+      loadData();
+    } catch (err) {
+      console.error('Error creating exam:', err);
+    } finally {
+      setCreatingExam(false);
+    }
+  };
+
+  const handleOpenEditExam = (exam: AcademicItem) => {
+    setEditingExam(exam);
+    setEditExamTitle(exam.title);
+    setEditExamDescription(exam.description || '');
+    setEditExamType(exam.type === 'quiz' ? 'quiz' : 'exam');
+    setEditExamDate(
+      exam.due_date ? exam.due_date.split('T')[0] : exam.original_date_text || ''
+    );
+    setEditExamPoints(exam.points ? String(exam.points) : '');
+    setEditExamStatus(exam.status);
+    setEditExamModalVisible(true);
+  };
+
+  const handleUpdateExam = async () => {
+    if (!editingExam || !editExamTitle.trim()) return;
+    setSavingExam(true);
+
+    try {
+      const pointsNum = editExamPoints ? parseFloat(editExamPoints) : null;
+      const dueIso = editExamDate ? new Date(editExamDate).toISOString() : null;
+
+      const updates: Partial<AcademicItem> = {
+        title: editExamTitle.trim(),
+        description: editExamDescription.trim(),
+        type: editExamType,
+        due_date: dueIso,
+        original_date_text: editExamDate || null,
+        points: isNaN(pointsNum as number) ? null : pointsNum,
+        status: editExamStatus,
+      };
+
+      await academicItemService.updateItem(editingExam.id, updates);
+      setItems((prev) =>
+        prev.map((i) => (i.id === editingExam.id ? { ...i, ...updates } : i))
+      );
+      setEditExamModalVisible(false);
+      loadData();
+    } catch (err) {
+      console.error('Error updating exam:', err);
+    } finally {
+      setSavingExam(false);
+    }
+  };
+
+  const handleDeleteExam = async (examId: string) => {
+    setItems((prev) => prev.filter((i) => i.id !== examId));
+    if (editExamModalVisible && editingExam?.id === examId) {
+      setEditExamModalVisible(false);
+    }
+    await academicItemService.deleteItem(examId);
+  };
+
+  // ==========================================
+  // Note Handlers
+  // ==========================================
   const handleCreateNote = async () => {
-    if (!user || !classId || !newNoteTitle.trim()) return;
+    if (!classId || !newNoteTitle.trim()) return;
     setCreatingNote(true);
+    const effectiveUserId = user?.id || 'guest_student';
 
     await notesService.createNote({
       class_id: classId,
-      user_id: user.id,
+      user_id: effectiveUserId,
       title: newNoteTitle.trim(),
       content: newNoteContent.trim(),
     });
@@ -179,17 +429,19 @@ export default function ClassDashboardScreen() {
     await notesService.deleteNote(noteId);
   };
 
-  // Calculations
+  // Calculations & Item Slices
   const completedCount = items.filter((i) => i.status === 'completed').length;
   const totalCount = items.length;
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+
   const examsList = items.filter((i) => i.type === 'exam' || i.type === 'quiz');
+  const tasksList = items.filter((i) => i.type !== 'exam' && i.type !== 'quiz');
 
   if (!classData && !loading) {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorTitle}>Class Not Found</Text>
-        <Button title="Back to Classes" onPress={() => router.push('/(tabs)/classes')} />
+        <Button title="Back to Dashboard" onPress={() => router.replace('/(tabs)/dashboard')} />
       </View>
     );
   }
@@ -207,10 +459,10 @@ export default function ClassDashboardScreen() {
         {/* Navigation & Header */}
         <View style={styles.topBar}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => router.replace('/(tabs)/dashboard')}
             style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
             <ArrowLeft size={18} color={Colors.light.text} />
-            <Text style={styles.backBtnText}>Classes</Text>
+            <Text style={styles.backBtnText}>Dashboard</Text>
           </Pressable>
 
           <View style={styles.headerRightActions}>
@@ -277,7 +529,7 @@ export default function ClassDashboardScreen() {
         <View style={styles.tabsContainer}>
           {[
             { key: 'overview', label: 'Overview', icon: BookOpen },
-            { key: 'assignments', label: `Tasks (${items.length})`, icon: Clock },
+            { key: 'assignments', label: `Tasks (${tasksList.length})`, icon: Clock },
             { key: 'exams', label: `Exams (${examsList.length})`, icon: GraduationCap },
             { key: 'policies', label: 'Course Info', icon: Info },
             { key: 'notes', label: `Notes (${notes.length})`, icon: FileText },
@@ -305,7 +557,9 @@ export default function ClassDashboardScreen() {
           })}
         </View>
 
+        {/* ============================================================== */}
         {/* Tab 1: Overview */}
+        {/* ============================================================== */}
         {activeTab === 'overview' && (
           <View style={styles.tabContent}>
             {/* Quick Stats Grid */}
@@ -313,9 +567,9 @@ export default function ClassDashboardScreen() {
               <Card style={styles.overviewStatCard}>
                 <Clock size={20} color={themeColor} />
                 <Text style={styles.overviewStatValue}>
-                  {items.filter((i) => i.status !== 'completed').length}
+                  {tasksList.filter((i) => i.status !== 'completed').length}
                 </Text>
-                <Text style={styles.overviewStatLabel}>Remaining Tasks</Text>
+                <Text style={styles.overviewStatLabel}>Pending Tasks</Text>
               </Card>
 
               <Card style={styles.overviewStatCard}>
@@ -372,6 +626,7 @@ export default function ClassDashboardScreen() {
                       key={item.id}
                       item={item}
                       onToggleStatus={handleToggleTaskStatus}
+                      onPress={() => (item.type === 'exam' || item.type === 'quiz' ? handleOpenEditExam(item) : handleOpenEditTask(item))}
                     />
                   ))
               )}
@@ -379,11 +634,18 @@ export default function ClassDashboardScreen() {
           </View>
         )}
 
-        {/* Tab 2: Assignments & Tasks */}
+        {/* ============================================================== */}
+        {/* Tab 2: Assignments & Tasks (Full CRUD) */}
+        {/* ============================================================== */}
         {activeTab === 'assignments' && (
           <View style={styles.tabContent}>
             <View style={styles.subHeaderRow}>
-              <Text style={styles.cardHeaderTitle}>All Course Tasks</Text>
+              <View>
+                <Text style={styles.cardHeaderTitle}>Course Tasks & Assignments</Text>
+                <Text style={styles.subHeaderSubtitle}>
+                  Manage, edit, or complete homework, projects, and readings
+                </Text>
+              </View>
               <Button
                 title="Add Task"
                 size="sm"
@@ -392,22 +654,31 @@ export default function ClassDashboardScreen() {
               />
             </View>
 
-            {items.length === 0 ? (
+            {tasksList.length === 0 ? (
               <EmptyState
                 icon={<Clock size={28} color={themeColor} />}
                 title="No tasks yet"
-                description="Add assignments manually or upload a syllabus to automatically populate assignments."
+                description="Add assignments manually or upload a syllabus to automatically extract course tasks."
                 actionTitle="Add New Task"
                 onAction={() => setTaskModalVisible(true)}
               />
             ) : (
-              items.map((item) => (
+              tasksList.map((item) => (
                 <View key={item.id} style={styles.taskWithDelete}>
                   <View style={{ flex: 1 }}>
-                    <TaskItem item={item} onToggleStatus={handleToggleTaskStatus} />
+                    <TaskItem
+                      item={item}
+                      onToggleStatus={handleToggleTaskStatus}
+                      onPress={() => handleOpenEditTask(item)}
+                    />
                   </View>
                   <Pressable
-                    style={styles.deleteTaskBtn}
+                    style={styles.actionBtn}
+                    onPress={() => handleOpenEditTask(item)}>
+                    <Edit2 size={16} color={Colors.light.textSecondary} />
+                  </Pressable>
+                  <Pressable
+                    style={[styles.actionBtn, styles.deleteBtnHover]}
                     onPress={() => handleDeleteTask(item.id)}>
                     <Trash2 size={16} color={Colors.light.danger} />
                   </Pressable>
@@ -417,85 +688,214 @@ export default function ClassDashboardScreen() {
           </View>
         )}
 
-        {/* Tab 3: Exams & Quizzes */}
+        {/* ============================================================== */}
+        {/* Tab 3: Exams & Quizzes (Full CRUD) */}
+        {/* ============================================================== */}
         {activeTab === 'exams' && (
           <View style={styles.tabContent}>
-            <Text style={styles.cardHeaderTitle}>Exams & Scheduled Quizzes</Text>
+            <View style={styles.subHeaderRow}>
+              <View>
+                <Text style={styles.cardHeaderTitle}>Exams & Scheduled Quizzes</Text>
+                <Text style={styles.subHeaderSubtitle}>
+                  Midterms, final examinations, and quizzes
+                </Text>
+              </View>
+              <Button
+                title="Add Exam"
+                size="sm"
+                icon={<Plus size={14} color="#FFFFFF" />}
+                onPress={() => setExamModalVisible(true)}
+                style={{ backgroundColor: '#EF4444' }}
+              />
+            </View>
+
             {examsList.length === 0 ? (
               <EmptyState
                 icon={<GraduationCap size={28} color="#EF4444" />}
                 title="No Exams Found"
-                description="No upcoming exams or quizzes detected in this syllabus."
+                description="No upcoming exams or quizzes in this course. Tap below to schedule an exam."
+                actionTitle="Add Exam"
+                onAction={() => setExamModalVisible(true)}
               />
             ) : (
-              examsList.map((exam) => (
-                <Card key={exam.id} style={styles.examCard}>
-                  <View style={styles.examHeader}>
-                    <View style={styles.examTitleBox}>
-                      <GraduationCap size={20} color="#EF4444" />
-                      <Text style={styles.examTitle}>{exam.title}</Text>
+              examsList.map((exam) => {
+                const isCompleted = exam.status === 'completed';
+
+                return (
+                  <Card key={exam.id} style={[styles.examCard, isCompleted && styles.examCompletedCard]}>
+                    <View style={styles.examHeader}>
+                      <View style={styles.examTitleBox}>
+                        <Pressable
+                          hitSlop={6}
+                          onPress={() => handleToggleTaskStatus(exam.id, exam.status)}>
+                          {isCompleted ? (
+                            <CheckCircle2 size={20} color={Colors.light.success} />
+                          ) : (
+                            <GraduationCap size={20} color="#EF4444" />
+                          )}
+                        </Pressable>
+                        <Text
+                          style={[
+                            styles.examTitle,
+                            isCompleted && styles.completedTitle,
+                          ]}>
+                          {exam.title}
+                        </Text>
+                      </View>
+
+                      <View style={styles.examHeaderRight}>
+                        {exam.points ? (
+                          <Text style={styles.examPoints}>{exam.points} pts</Text>
+                        ) : null}
+                        <Pressable
+                          style={styles.actionBtn}
+                          onPress={() => handleOpenEditExam(exam)}>
+                          <Edit2 size={15} color={Colors.light.textSecondary} />
+                        </Pressable>
+                        <Pressable
+                          style={[styles.actionBtn, styles.deleteBtnHover]}
+                          onPress={() => handleDeleteExam(exam.id)}>
+                          <Trash2 size={15} color={Colors.light.danger} />
+                        </Pressable>
+                      </View>
                     </View>
-                    {exam.points ? (
-                      <Text style={styles.examPoints}>{exam.points} pts</Text>
+
+                    {exam.due_date && (
+                      <View style={styles.examDateRow}>
+                        <Calendar size={14} color={Colors.light.textSecondary} />
+                        <Text style={styles.examDateText}>
+                          Date: {format(new Date(exam.due_date), 'EEE, MMM d, yyyy')}
+                        </Text>
+                      </View>
+                    )}
+
+                    {exam.description ? (
+                      <Text style={styles.examDesc}>{exam.description}</Text>
                     ) : null}
-                  </View>
 
-                  {exam.due_date && (
-                    <View style={styles.examDateRow}>
-                      <Calendar size={14} color={Colors.light.textSecondary} />
-                      <Text style={styles.examDateText}>
-                        Date: {new Date(exam.due_date).toLocaleDateString()}
-                      </Text>
-                    </View>
-                  )}
-
-                  {exam.description ? (
-                    <Text style={styles.examDesc}>{exam.description}</Text>
-                  ) : null}
-
-                  {exam.source_excerpt ? (
-                    <View style={styles.excerptBox}>
-                      <Text style={styles.excerptTitle}>Excerpt from syllabus:</Text>
-                      <Text style={styles.excerptText}>&ldquo;{exam.source_excerpt}&rdquo;</Text>
-                    </View>
-                  ) : null}
-                </Card>
-              ))
+                    {exam.source_excerpt ? (
+                      <View style={styles.excerptBox}>
+                        <Text style={styles.excerptTitle}>Excerpt from syllabus:</Text>
+                        <Text style={styles.excerptText}>&ldquo;{exam.source_excerpt}&rdquo;</Text>
+                      </View>
+                    ) : null}
+                  </Card>
+                );
+              })
             )}
           </View>
         )}
 
-        {/* Tab 4: Policies & Info */}
+        {/* ============================================================== */}
+        {/* Tab 4: Course Info & Policies (Editing Support) */}
+        {/* ============================================================== */}
         {activeTab === 'policies' && (
           <View style={styles.tabContent}>
-            {classData?.description ? (
-              <Card style={styles.policyCard}>
+            <View style={styles.subHeaderRow}>
+              <View>
+                <Text style={styles.cardHeaderTitle}>Course Information & Policies</Text>
+                <Text style={styles.subHeaderSubtitle}>
+                  View and update course description, office hours, and attendance rules
+                </Text>
+              </View>
+              <Button
+                title="Edit Course Info"
+                size="sm"
+                variant="outline"
+                icon={<Edit3 size={14} color={Colors.light.text} />}
+                onPress={handleOpenEditCourseInfo}
+              />
+            </View>
+
+            {/* Course Description */}
+            <Card style={styles.policyCard}>
+              <View style={styles.policyCardHeader}>
                 <Text style={styles.policyTitle}>Course Description</Text>
-                <Text style={styles.policyText}>{classData.description}</Text>
-              </Card>
-            ) : null}
+                <Pressable
+                  hitSlop={8}
+                  style={styles.inlineEditBtn}
+                  onPress={handleOpenEditCourseInfo}>
+                  <Edit2 size={14} color={Colors.light.primary} />
+                  <Text style={styles.inlineEditText}>Edit</Text>
+                </Pressable>
+              </View>
+              <Text
+                style={[
+                  styles.policyText,
+                  !classData?.description && styles.placeholderText,
+                ]}>
+                {classData?.description ||
+                  'No description provided. Tap Edit above to add an overview and course objectives.'}
+              </Text>
+            </Card>
 
-            {classData?.office_hours ? (
-              <Card style={styles.policyCard}>
+            {/* Office Hours & Location */}
+            <Card style={styles.policyCard}>
+              <View style={styles.policyCardHeader}>
                 <Text style={styles.policyTitle}>Office Hours & Location</Text>
-                <Text style={styles.policyText}>{classData.office_hours}</Text>
-              </Card>
-            ) : null}
+                <Pressable
+                  hitSlop={8}
+                  style={styles.inlineEditBtn}
+                  onPress={handleOpenEditCourseInfo}>
+                  <Edit2 size={14} color={Colors.light.primary} />
+                  <Text style={styles.inlineEditText}>Edit</Text>
+                </Pressable>
+              </View>
+              <Text
+                style={[
+                  styles.policyText,
+                  !classData?.office_hours && styles.placeholderText,
+                ]}>
+                {classData?.office_hours ||
+                  'No office hours or meeting location recorded. Tap Edit to add your instructor\'s contact hours and office room.'}
+              </Text>
+            </Card>
 
-            {classData?.late_policy ? (
-              <Card style={styles.policyCard}>
-                <Text style={styles.policyTitle}>Late Submission Policy</Text>
-                <Text style={styles.policyText}>{classData.late_policy}</Text>
-              </Card>
-            ) : null}
-
-            {classData?.attendance_policy ? (
-              <Card style={styles.policyCard}>
+            {/* Attendance Policy */}
+            <Card style={styles.policyCard}>
+              <View style={styles.policyCardHeader}>
                 <Text style={styles.policyTitle}>Attendance Policy</Text>
-                <Text style={styles.policyText}>{classData.attendance_policy}</Text>
-              </Card>
-            ) : null}
+                <Pressable
+                  hitSlop={8}
+                  style={styles.inlineEditBtn}
+                  onPress={handleOpenEditCourseInfo}>
+                  <Edit2 size={14} color={Colors.light.primary} />
+                  <Text style={styles.inlineEditText}>Edit</Text>
+                </Pressable>
+              </View>
+              <Text
+                style={[
+                  styles.policyText,
+                  !classData?.attendance_policy && styles.placeholderText,
+                ]}>
+                {classData?.attendance_policy ||
+                  'No attendance policy specified. Tap Edit to record attendance requirements and participation rules.'}
+              </Text>
+            </Card>
 
+            {/* Late Submission Policy */}
+            <Card style={styles.policyCard}>
+              <View style={styles.policyCardHeader}>
+                <Text style={styles.policyTitle}>Late Submission Policy</Text>
+                <Pressable
+                  hitSlop={8}
+                  style={styles.inlineEditBtn}
+                  onPress={handleOpenEditCourseInfo}>
+                  <Edit2 size={14} color={Colors.light.primary} />
+                  <Text style={styles.inlineEditText}>Edit</Text>
+                </Pressable>
+              </View>
+              <Text
+                style={[
+                  styles.policyText,
+                  !classData?.late_policy && styles.placeholderText,
+                ]}>
+                {classData?.late_policy ||
+                  'No late policy specified. Tap Edit to enter slip days, penalties, or extension rules.'}
+              </Text>
+            </Card>
+
+            {/* Required Textbooks */}
             {classData?.required_textbooks && classData.required_textbooks.length > 0 ? (
               <Card style={styles.policyCard}>
                 <Text style={styles.policyTitle}>Required Textbooks & Materials</Text>
@@ -509,7 +909,9 @@ export default function ClassDashboardScreen() {
           </View>
         )}
 
+        {/* ============================================================== */}
         {/* Tab 5: Notes */}
+        {/* ============================================================== */}
         {activeTab === 'notes' && (
           <View style={styles.tabContent}>
             <View style={styles.subHeaderRow}>
@@ -543,7 +945,7 @@ export default function ClassDashboardScreen() {
                   </View>
                   <Text style={styles.noteContent}>{note.content}</Text>
                   <Text style={styles.noteDate}>
-                    {new Date(note.created_at).toLocaleDateString()}
+                    {format(new Date(note.created_at), 'MMM d, yyyy')}
                   </Text>
                 </Card>
               ))
@@ -551,7 +953,88 @@ export default function ClassDashboardScreen() {
           </View>
         )}
 
-        {/* Add Task Modal */}
+        {/* ============================================================== */}
+        {/* Modal 1: Edit Course Info (Description, Office Hours, Attendance) */}
+        {/* ============================================================== */}
+        <Modal
+          visible={courseInfoModalVisible}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setCourseInfoModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <Card style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Edit Course Information</Text>
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => setCourseInfoModalVisible(false)}>
+                  <X size={20} color={Colors.light.textSecondary} />
+                </Pressable>
+              </View>
+
+              <ScrollView style={{ maxHeight: 480 }} showsVerticalScrollIndicator={false}>
+                <Input
+                  label="Course Description"
+                  placeholder="Summarize course goals, syllabus overview, or catalog blurb..."
+                  value={editDescription}
+                  onChangeText={setEditDescription}
+                  multiline
+                  numberOfLines={4}
+                  style={{ height: 85, textAlignVertical: 'top' }}
+                />
+
+                <Input
+                  label="Office Hours & Location"
+                  placeholder="e.g. Tuesdays & Thursdays 2:00 PM - 4:00 PM, Turing Hall Room 402"
+                  value={editOfficeHours}
+                  onChangeText={setEditOfficeHours}
+                  multiline
+                  numberOfLines={2}
+                  style={{ height: 60, textAlignVertical: 'top' }}
+                />
+
+                <Input
+                  label="Attendance Policy"
+                  placeholder="e.g. Attendance is required. More than 3 unexcused absences result in grade penalty."
+                  value={editAttendancePolicy}
+                  onChangeText={setEditAttendancePolicy}
+                  multiline
+                  numberOfLines={3}
+                  style={{ height: 75, textAlignVertical: 'top' }}
+                />
+
+                <Input
+                  label="Late Submission Policy"
+                  placeholder="e.g. 3 slip days allowed for semester. Late work thereafter penalized 10% per day."
+                  value={editLatePolicy}
+                  onChangeText={setEditLatePolicy}
+                  multiline
+                  numberOfLines={3}
+                  style={{ height: 75, textAlignVertical: 'top' }}
+                />
+              </ScrollView>
+
+              <View style={styles.modalActions}>
+                <Button
+                  title="Cancel"
+                  variant="outline"
+                  onPress={() => setCourseInfoModalVisible(false)}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  title="Save Information"
+                  onPress={handleSaveCourseInfo}
+                  loading={savingCourseInfo}
+                  style={{ flex: 1, backgroundColor: themeColor }}
+                />
+              </View>
+            </Card>
+          </View>
+        </Modal>
+
+        {/* ============================================================== */}
+        {/* Modal 2: Create Task */}
+        {/* ============================================================== */}
         <Modal
           visible={taskModalVisible}
           animationType="fade"
@@ -559,54 +1042,71 @@ export default function ClassDashboardScreen() {
           onRequestClose={() => setTaskModalVisible(false)}>
           <View style={styles.modalOverlay}>
             <Card style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Add New Academic Task</Text>
-
-              <Input
-                label="Task Title *"
-                placeholder="e.g. Problem Set 3"
-                value={newTaskTitle}
-                onChangeText={setNewTaskTitle}
-              />
-
-              <View style={styles.typeSelector}>
-                <Text style={styles.inputLabel}>Type</Text>
-                <View style={styles.typeButtonsRow}>
-                  {(['assignment', 'exam', 'quiz', 'project', 'reading'] as AcademicItemType[]).map(
-                    (t) => (
-                      <Pressable
-                        key={t}
-                        onPress={() => setNewTaskType(t)}
-                        style={[
-                          styles.typeChoiceBtn,
-                          newTaskType === t && [styles.typeChoiceActive, { borderColor: themeColor }],
-                        ]}>
-                        <Text
-                          style={[
-                            styles.typeChoiceText,
-                            newTaskType === t && { color: themeColor, fontWeight: '700' },
-                          ]}>
-                          {t}
-                        </Text>
-                      </Pressable>
-                    )
-                  )}
-                </View>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Add New Academic Task</Text>
+                <Pressable hitSlop={8} onPress={() => setTaskModalVisible(false)}>
+                  <X size={20} color={Colors.light.textSecondary} />
+                </Pressable>
               </View>
 
-              <Input
-                label="Due Date (YYYY-MM-DD)"
-                placeholder="2026-12-05"
-                value={newTaskDueDate}
-                onChangeText={setNewTaskDueDate}
-              />
+              <ScrollView style={{ maxHeight: 480 }} showsVerticalScrollIndicator={false}>
+                <Input
+                  label="Task Title *"
+                  placeholder="e.g. Problem Set 3: Concurrency"
+                  value={newTaskTitle}
+                  onChangeText={setNewTaskTitle}
+                />
 
-              <Input
-                label="Points / Weight (Optional)"
-                placeholder="e.g. 100"
-                value={newTaskPoints}
-                onChangeText={setNewTaskPoints}
-                keyboardType="numeric"
-              />
+                <View style={styles.typeSelector}>
+                  <Text style={styles.inputLabel}>Category</Text>
+                  <View style={styles.typeButtonsRow}>
+                    {(['assignment', 'project', 'reading', 'quiz', 'other'] as AcademicItemType[]).map(
+                      (t) => (
+                        <Pressable
+                          key={t}
+                          onPress={() => setNewTaskType(t)}
+                          style={[
+                            styles.typeChoiceBtn,
+                            newTaskType === t && [styles.typeChoiceActive, { borderColor: themeColor }],
+                          ]}>
+                          <Text
+                            style={[
+                              styles.typeChoiceText,
+                              newTaskType === t && { color: themeColor, fontWeight: '700' },
+                            ]}>
+                            {t}
+                          </Text>
+                        </Pressable>
+                      )
+                    )}
+                  </View>
+                </View>
+
+                <Input
+                  label="Due Date (YYYY-MM-DD)"
+                  placeholder="2026-10-15"
+                  value={newTaskDueDate}
+                  onChangeText={setNewTaskDueDate}
+                />
+
+                <Input
+                  label="Points / Weight (Optional)"
+                  placeholder="e.g. 50"
+                  value={newTaskPoints}
+                  onChangeText={setNewTaskPoints}
+                  keyboardType="numeric"
+                />
+
+                <Input
+                  label="Description / Instructions"
+                  placeholder="Optional details or submission requirements..."
+                  value={newTaskDescription}
+                  onChangeText={setNewTaskDescription}
+                  multiline
+                  numberOfLines={2}
+                  style={{ height: 60, textAlignVertical: 'top' }}
+                />
+              </ScrollView>
 
               <View style={styles.modalActions}>
                 <Button
@@ -616,7 +1116,7 @@ export default function ClassDashboardScreen() {
                   style={{ flex: 1 }}
                 />
                 <Button
-                  title="Save Task"
+                  title="Create Task"
                   onPress={handleCreateTask}
                   loading={creatingTask}
                   style={{ flex: 1, backgroundColor: themeColor }}
@@ -626,7 +1126,389 @@ export default function ClassDashboardScreen() {
           </View>
         </Modal>
 
-        {/* Add Note Modal */}
+        {/* ============================================================== */}
+        {/* Modal 3: Edit Task (Update & Delete) */}
+        {/* ============================================================== */}
+        <Modal
+          visible={editTaskModalVisible}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setEditTaskModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <Card style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Edit Academic Task</Text>
+                <Pressable hitSlop={8} onPress={() => setEditTaskModalVisible(false)}>
+                  <X size={20} color={Colors.light.textSecondary} />
+                </Pressable>
+              </View>
+
+              <ScrollView style={{ maxHeight: 480 }} showsVerticalScrollIndicator={false}>
+                <Input
+                  label="Task Title *"
+                  value={editTaskTitle}
+                  onChangeText={setEditTaskTitle}
+                />
+
+                <View style={styles.typeSelector}>
+                  <Text style={styles.inputLabel}>Category</Text>
+                  <View style={styles.typeButtonsRow}>
+                    {(['assignment', 'project', 'reading', 'quiz', 'other'] as AcademicItemType[]).map(
+                      (t) => (
+                        <Pressable
+                          key={t}
+                          onPress={() => setEditTaskType(t)}
+                          style={[
+                            styles.typeChoiceBtn,
+                            editTaskType === t && [styles.typeChoiceActive, { borderColor: themeColor }],
+                          ]}>
+                          <Text
+                            style={[
+                              styles.typeChoiceText,
+                              editTaskType === t && { color: themeColor, fontWeight: '700' },
+                            ]}>
+                            {t}
+                          </Text>
+                        </Pressable>
+                      )
+                    )}
+                  </View>
+                </View>
+
+                {/* Status Toggle */}
+                <View style={styles.typeSelector}>
+                  <Text style={styles.inputLabel}>Status</Text>
+                  <View style={styles.typeButtonsRow}>
+                    <Pressable
+                      onPress={() => setEditTaskStatus('pending')}
+                      style={[
+                        styles.typeChoiceBtn,
+                        editTaskStatus === 'pending' && [styles.typeChoiceActive, { borderColor: Colors.light.warning }],
+                      ]}>
+                      <Text
+                        style={[
+                          styles.typeChoiceText,
+                          editTaskStatus === 'pending' && { color: Colors.light.warning, fontWeight: '700' },
+                        ]}>
+                        Pending
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setEditTaskStatus('completed')}
+                      style={[
+                        styles.typeChoiceBtn,
+                        editTaskStatus === 'completed' && [styles.typeChoiceActive, { borderColor: Colors.light.success }],
+                      ]}>
+                      <Text
+                        style={[
+                          styles.typeChoiceText,
+                          editTaskStatus === 'completed' && { color: Colors.light.success, fontWeight: '700' },
+                        ]}>
+                        Completed
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+
+                <Input
+                  label="Due Date (YYYY-MM-DD)"
+                  placeholder="2026-10-15"
+                  value={editTaskDueDate}
+                  onChangeText={setEditTaskDueDate}
+                />
+
+                <Input
+                  label="Points / Weight"
+                  placeholder="e.g. 50"
+                  value={editTaskPoints}
+                  onChangeText={setEditTaskPoints}
+                  keyboardType="numeric"
+                />
+
+                <Input
+                  label="Description / Notes"
+                  value={editTaskDescription}
+                  onChangeText={setEditTaskDescription}
+                  multiline
+                  numberOfLines={2}
+                  style={{ height: 60, textAlignVertical: 'top' }}
+                />
+              </ScrollView>
+
+              <View style={styles.modalFooterBetween}>
+                <Button
+                  title="Delete"
+                  variant="outline"
+                  icon={<Trash2 size={14} color={Colors.light.danger} />}
+                  onPress={() => editingTask && handleDeleteTask(editingTask.id)}
+                  style={{ borderColor: Colors.light.danger }}
+                />
+                <View style={{ flexDirection: 'row', gap: Spacing.two }}>
+                  <Button
+                    title="Cancel"
+                    variant="outline"
+                    onPress={() => setEditTaskModalVisible(false)}
+                  />
+                  <Button
+                    title="Save Changes"
+                    onPress={handleUpdateTask}
+                    loading={savingTask}
+                    style={{ backgroundColor: themeColor }}
+                  />
+                </View>
+              </View>
+            </Card>
+          </View>
+        </Modal>
+
+        {/* ============================================================== */}
+        {/* Modal 4: Create Exam / Quiz */}
+        {/* ============================================================== */}
+        <Modal
+          visible={examModalVisible}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setExamModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <Card style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Schedule Exam or Quiz</Text>
+                <Pressable hitSlop={8} onPress={() => setExamModalVisible(false)}>
+                  <X size={20} color={Colors.light.textSecondary} />
+                </Pressable>
+              </View>
+
+              <ScrollView style={{ maxHeight: 480 }} showsVerticalScrollIndicator={false}>
+                <Input
+                  label="Exam Title *"
+                  placeholder="e.g. Midterm 1: Virtual Memory"
+                  value={newExamTitle}
+                  onChangeText={setNewExamTitle}
+                />
+
+                <View style={styles.typeSelector}>
+                  <Text style={styles.inputLabel}>Type</Text>
+                  <View style={styles.typeButtonsRow}>
+                    <Pressable
+                      onPress={() => setNewExamType('exam')}
+                      style={[
+                        styles.typeChoiceBtn,
+                        newExamType === 'exam' && [styles.typeChoiceActive, { borderColor: '#EF4444' }],
+                      ]}>
+                      <Text
+                        style={[
+                          styles.typeChoiceText,
+                          newExamType === 'exam' && { color: '#EF4444', fontWeight: '700' },
+                        ]}>
+                        Examination
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setNewExamType('quiz')}
+                      style={[
+                        styles.typeChoiceBtn,
+                        newExamType === 'quiz' && [styles.typeChoiceActive, { borderColor: '#EF4444' }],
+                      ]}>
+                      <Text
+                        style={[
+                          styles.typeChoiceText,
+                          newExamType === 'quiz' && { color: '#EF4444', fontWeight: '700' },
+                        ]}>
+                        Quiz
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+
+                <Input
+                  label="Exam Date (YYYY-MM-DD)"
+                  placeholder="2026-10-22"
+                  value={newExamDate}
+                  onChangeText={setNewExamDate}
+                />
+
+                <Input
+                  label="Points / Weight"
+                  placeholder="e.g. 150"
+                  value={newExamPoints}
+                  onChangeText={setNewExamPoints}
+                  keyboardType="numeric"
+                />
+
+                <Input
+                  label="Location / Coverage Topics"
+                  placeholder="e.g. Turing Hall 101, Chapters 1-5"
+                  value={newExamDescription}
+                  onChangeText={setNewExamDescription}
+                  multiline
+                  numberOfLines={2}
+                  style={{ height: 60, textAlignVertical: 'top' }}
+                />
+              </ScrollView>
+
+              <View style={styles.modalActions}>
+                <Button
+                  title="Cancel"
+                  variant="outline"
+                  onPress={() => setExamModalVisible(false)}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  title="Add Exam"
+                  onPress={handleCreateExam}
+                  loading={creatingExam}
+                  style={{ flex: 1, backgroundColor: '#EF4444' }}
+                />
+              </View>
+            </Card>
+          </View>
+        </Modal>
+
+        {/* ============================================================== */}
+        {/* Modal 5: Edit Exam / Quiz (Update & Delete) */}
+        {/* ============================================================== */}
+        <Modal
+          visible={editExamModalVisible}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setEditExamModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <Card style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Edit Exam or Quiz</Text>
+                <Pressable hitSlop={8} onPress={() => setEditExamModalVisible(false)}>
+                  <X size={20} color={Colors.light.textSecondary} />
+                </Pressable>
+              </View>
+
+              <ScrollView style={{ maxHeight: 480 }} showsVerticalScrollIndicator={false}>
+                <Input
+                  label="Exam Title *"
+                  value={editExamTitle}
+                  onChangeText={setEditExamTitle}
+                />
+
+                <View style={styles.typeSelector}>
+                  <Text style={styles.inputLabel}>Type</Text>
+                  <View style={styles.typeButtonsRow}>
+                    <Pressable
+                      onPress={() => setEditExamType('exam')}
+                      style={[
+                        styles.typeChoiceBtn,
+                        editExamType === 'exam' && [styles.typeChoiceActive, { borderColor: '#EF4444' }],
+                      ]}>
+                      <Text
+                        style={[
+                          styles.typeChoiceText,
+                          editExamType === 'exam' && { color: '#EF4444', fontWeight: '700' },
+                        ]}>
+                        Examination
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setEditExamType('quiz')}
+                      style={[
+                        styles.typeChoiceBtn,
+                        editExamType === 'quiz' && [styles.typeChoiceActive, { borderColor: '#EF4444' }],
+                      ]}>
+                      <Text
+                        style={[
+                          styles.typeChoiceText,
+                          editExamType === 'quiz' && { color: '#EF4444', fontWeight: '700' },
+                        ]}>
+                        Quiz
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+
+                {/* Status Toggle */}
+                <View style={styles.typeSelector}>
+                  <Text style={styles.inputLabel}>Status</Text>
+                  <View style={styles.typeButtonsRow}>
+                    <Pressable
+                      onPress={() => setEditExamStatus('pending')}
+                      style={[
+                        styles.typeChoiceBtn,
+                        editExamStatus === 'pending' && [styles.typeChoiceActive, { borderColor: Colors.light.warning }],
+                      ]}>
+                      <Text
+                        style={[
+                          styles.typeChoiceText,
+                          editExamStatus === 'pending' && { color: Colors.light.warning, fontWeight: '700' },
+                        ]}>
+                        Upcoming
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setEditExamStatus('completed')}
+                      style={[
+                        styles.typeChoiceBtn,
+                        editExamStatus === 'completed' && [styles.typeChoiceActive, { borderColor: Colors.light.success }],
+                      ]}>
+                      <Text
+                        style={[
+                          styles.typeChoiceText,
+                          editExamStatus === 'completed' && { color: Colors.light.success, fontWeight: '700' },
+                        ]}>
+                        Completed
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+
+                <Input
+                  label="Exam Date (YYYY-MM-DD)"
+                  value={editExamDate}
+                  onChangeText={setEditExamDate}
+                />
+
+                <Input
+                  label="Points / Weight"
+                  value={editExamPoints}
+                  onChangeText={setEditExamPoints}
+                  keyboardType="numeric"
+                />
+
+                <Input
+                  label="Description / Location"
+                  value={editExamDescription}
+                  onChangeText={setEditExamDescription}
+                  multiline
+                  numberOfLines={2}
+                  style={{ height: 60, textAlignVertical: 'top' }}
+                />
+              </ScrollView>
+
+              <View style={styles.modalFooterBetween}>
+                <Button
+                  title="Delete Exam"
+                  variant="outline"
+                  icon={<Trash2 size={14} color={Colors.light.danger} />}
+                  onPress={() => editingExam && handleDeleteExam(editingExam.id)}
+                  style={{ borderColor: Colors.light.danger }}
+                />
+                <View style={{ flexDirection: 'row', gap: Spacing.two }}>
+                  <Button
+                    title="Cancel"
+                    variant="outline"
+                    onPress={() => setEditExamModalVisible(false)}
+                  />
+                  <Button
+                    title="Save Changes"
+                    onPress={handleUpdateExam}
+                    loading={savingExam}
+                    style={{ backgroundColor: '#EF4444' }}
+                  />
+                </View>
+              </View>
+            </Card>
+          </View>
+        </Modal>
+
+        {/* ============================================================== */}
+        {/* Modal 6: Create Note */}
+        {/* ============================================================== */}
         <Modal
           visible={noteModalVisible}
           animationType="fade"
@@ -634,7 +1516,12 @@ export default function ClassDashboardScreen() {
           onRequestClose={() => setNoteModalVisible(false)}>
           <View style={styles.modalOverlay}>
             <Card style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Create Course Note</Text>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Create Course Note</Text>
+                <Pressable hitSlop={8} onPress={() => setNoteModalVisible(false)}>
+                  <X size={20} color={Colors.light.textSecondary} />
+                </Pressable>
+              </View>
 
               <Input
                 label="Note Title *"
@@ -867,7 +1754,12 @@ const styles = StyleSheet.create({
     ...Typography.lg,
     fontWeight: '700',
     color: Colors.light.text,
-    marginBottom: Spacing.three,
+    marginBottom: 2,
+  },
+  subHeaderSubtitle: {
+    ...Typography.xs,
+    color: Colors.light.textSecondary,
+    marginBottom: Spacing.two,
   },
   breakdownList: {
     gap: Spacing.three,
@@ -915,7 +1807,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
   },
-  deleteTaskBtn: {
+  actionBtn: {
     padding: Spacing.two,
     backgroundColor: Colors.light.card,
     borderRadius: BorderRadius.md,
@@ -925,10 +1817,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: Spacing.two,
   },
+  deleteBtnHover: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
   examCard: {
     padding: Spacing.four,
     borderLeftWidth: 4,
     borderLeftColor: '#EF4444',
+  },
+  examCompletedCard: {
+    opacity: 0.75,
+    backgroundColor: '#F8FAFC',
+    borderLeftColor: Colors.light.success,
   },
   examHeader: {
     flexDirection: 'row',
@@ -940,11 +1841,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
+    flex: 1,
+  },
+  examHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
   },
   examTitle: {
     ...Typography.md,
     fontWeight: '700',
     color: Colors.light.text,
+    flex: 1,
+  },
+  completedTitle: {
+    textDecorationLine: 'line-through',
+    color: Colors.light.textSecondary,
   },
   examPoints: {
     ...Typography.xs,
@@ -954,6 +1866,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     paddingHorizontal: 8,
     borderRadius: BorderRadius.full,
+    marginBottom: Spacing.two,
   },
   examDateRow: {
     flexDirection: 'row',
@@ -991,16 +1904,39 @@ const styles = StyleSheet.create({
   policyCard: {
     padding: Spacing.five,
   },
+  policyCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.two,
+  },
   policyTitle: {
     ...Typography.md,
     fontWeight: '700',
     color: Colors.light.text,
-    marginBottom: Spacing.two,
+  },
+  inlineEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: Colors.light.primaryLight,
+  },
+  inlineEditText: {
+    ...Typography.xs,
+    color: Colors.light.primary,
+    fontWeight: '600',
   },
   policyText: {
     ...Typography.sm,
     color: Colors.light.textSecondary,
     lineHeight: 22,
+  },
+  placeholderText: {
+    fontStyle: 'italic',
+    color: Colors.light.textMuted,
   },
   textbookItem: {
     ...Typography.sm,
@@ -1043,14 +1979,19 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    maxWidth: 480,
+    maxWidth: 520,
     padding: Spacing.six,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.four,
   },
   modalTitle: {
     ...Typography.lg,
     fontWeight: '800',
     color: Colors.light.text,
-    marginBottom: Spacing.four,
   },
   inputLabel: {
     ...Typography.sm,
@@ -1087,7 +2028,13 @@ const styles = StyleSheet.create({
   modalActions: {
     flexDirection: 'row',
     gap: Spacing.two,
-    marginTop: Spacing.two,
+    marginTop: Spacing.three,
+  },
+  modalFooterBetween: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: Spacing.three,
   },
   pressed: {
     opacity: 0.8,

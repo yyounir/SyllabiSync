@@ -5,10 +5,10 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  useWindowDimensions,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsDesktop } from '@/hooks/useResponsive';
 import { classService } from '@/services/class.service';
 import { academicItemService } from '@/services/academic-item.service';
 import { ClassItem, AcademicItem, AcademicItemStatus } from '@/types/database';
@@ -31,8 +31,7 @@ import {
 
 export default function DashboardScreen() {
   const { user, profile } = useAuth();
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= 768;
+  const isDesktop = useIsDesktop();
 
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [items, setItems] = useState<AcademicItem[]>([]);
@@ -40,11 +39,11 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const loadDashboardData = useCallback(async () => {
-    if (!user) return;
+    const effectiveUserId = user?.id || 'guest_student';
     try {
       const [classRes, itemsRes] = await Promise.all([
-        classService.getClasses(user.id),
-        academicItemService.getItems(user.id),
+        classService.getClasses(effectiveUserId),
+        academicItemService.getItems(effectiveUserId),
       ]);
 
       if (classRes.data) setClasses(classRes.data);
@@ -184,7 +183,7 @@ export default function DashboardScreen() {
           <EmptyState
             icon={<Upload size={32} color={Colors.light.primary} />}
             title="No courses added yet"
-            description="Upload your first course syllabus PDF. Gemini AI will automatically extract assignments, exam dates, grading policies, and build your dashboard in seconds."
+            description="Upload your first course syllabus PDF. SyllabiSync will automatically extract assignments, exam dates, grading policies, and build your dashboard in seconds."
             actionTitle="Upload Syllabus PDF"
             onAction={() => router.push('/classes/upload-syllabus')}
           />

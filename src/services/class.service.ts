@@ -178,7 +178,7 @@ export const classService = {
     try {
       const { error } = await supabase.from('classes').delete().eq('id', classId);
       return { error };
-    } catch (error) {
+    } catch {
       return { error: null };
     }
   },

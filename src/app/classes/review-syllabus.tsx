@@ -87,11 +87,12 @@ export default function ReviewSyllabusScreen() {
   };
 
   const handleConfirmAndSave = async () => {
-    if (!user) return;
     if (!courseName.trim() || !courseCode.trim()) {
       setError('Course name and code cannot be blank');
       return;
     }
+
+    const effectiveUserId = user?.id || 'guest_student';
 
     setError(null);
     setSaving(true);
@@ -99,7 +100,7 @@ export default function ReviewSyllabusScreen() {
     try {
       // 1. Create Class
       const { data: classRow, error: classError } = await classService.createClass({
-        user_id: user.id,
+        user_id: effectiveUserId,
         course_name: courseName.trim(),
         course_code: courseCode.trim().toUpperCase(),
         professor_name: professorName.trim() || 'TBD',
@@ -123,7 +124,7 @@ export default function ReviewSyllabusScreen() {
         try {
           await syllabusService.recordSyllabus(
             classRow.id,
-            user.id,
+            effectiveUserId,
             storagePath,
             originalFilename,
             description
@@ -135,26 +136,40 @@ export default function ReviewSyllabusScreen() {
 
       // 3. Save Academic Items in bulk
       if (items.length > 0) {
-        const itemRows = items.map((item) => ({
-          class_id: classRow.id,
-          user_id: user.id,
-          title: item.title,
-          description: item.description || '',
-          type: item.type,
-          due_date: item.due_date ? new Date(item.due_date).toISOString() : null,
-          status: 'pending' as const,
-          priority: item.type === 'exam' ? ('high' as const) : ('medium' as const),
-          points: item.points || null,
-          grade: null,
-          source_excerpt: item.source_excerpt || null,
-          original_date_text: item.original_date_text || null,
-          confidence: item.confidence || 0.9,
-          is_confirmed: true,
-          google_event_id: null,
-          google_calendar_id: null,
-          last_google_sync_at: null,
-          google_sync_status: 'not_synced' as const,
-        }));
+        const itemRows = items.map((item) => {
+          let safeDueDate: string | null = null;
+          if (item.due_date) {
+            try {
+              const d = new Date(item.due_date);
+              if (!isNaN(d.getTime())) {
+                safeDueDate = d.toISOString();
+              }
+            } catch {
+              safeDueDate = null;
+            }
+          }
+
+          return {
+            class_id: classRow.id,
+            user_id: effectiveUserId,
+            title: item.title,
+            description: item.description || '',
+            type: item.type,
+            due_date: safeDueDate,
+            status: 'pending' as const,
+            priority: item.type === 'exam' ? ('high' as const) : ('medium' as const),
+            points: item.points || null,
+            grade: null,
+            source_excerpt: item.source_excerpt || null,
+            original_date_text: item.original_date_text || null,
+            confidence: item.confidence || 0.9,
+            is_confirmed: true,
+            google_event_id: null,
+            google_calendar_id: null,
+            last_google_sync_at: null,
+            google_sync_status: 'not_synced' as const,
+          };
+        });
 
         await academicItemService.createItemsBulk(itemRows);
       }
@@ -163,7 +178,11 @@ export default function ReviewSyllabusScreen() {
       reviewStore.clear();
 
       // Navigate to the newly created class dashboard
-      router.replace(`/classes/${classRow.id}` as any);
+      try {
+        router.replace(`/classes/${classRow.id}` as any);
+      } catch {
+        router.push(`/classes/${classRow.id}` as any);
+      }
     } catch (err: any) {
       console.error('Error saving extracted syllabus:', err);
       setError(err?.message || 'Failed to create dashboard');
@@ -179,7 +198,7 @@ export default function ReviewSyllabusScreen() {
         {/* Top Header */}
         <View style={styles.topBar}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => router.replace('/classes/upload-syllabus')}
             style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
             <ArrowLeft size={18} color={Colors.light.text} />
             <Text style={styles.backBtnText}>Upload</Text>
@@ -426,6 +445,13 @@ export default function ReviewSyllabusScreen() {
             })}
           </View>
         </Card>
+
+        {/* Error Banner before action */}
+        {error && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
 
         {/* Final Confirmation Action Bar */}
         <View style={styles.confirmationBar}>

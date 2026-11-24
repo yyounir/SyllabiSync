@@ -31,17 +31,18 @@ export default function CreateClassScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const handleCreate = async () => {
-    if (!user) return;
     if (!courseName.trim() || !courseCode.trim()) {
       setError('Course name and course code are required.');
       return;
     }
 
+    const effectiveUserId = user?.id || 'guest_student';
+
     setError(null);
     setLoading(true);
 
     const { data, error: createError } = await classService.createClass({
-      user_id: user.id,
+      user_id: effectiveUserId,
       course_name: courseName.trim(),
       course_code: courseCode.trim().toUpperCase(),
       professor_name: professorName.trim() || 'TBD',
@@ -269,7 +270,7 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#FFFFFF',
     ...Platform.select({
-      web: { boxShadow: '0 0 0 2px #6366F1' },
+      web: { boxShadow: '0 0 0 2px #274f73' },
       default: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },

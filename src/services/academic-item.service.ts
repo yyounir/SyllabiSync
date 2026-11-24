@@ -293,7 +293,7 @@ export const academicItemService = {
         .eq('id', itemId);
 
       return { error };
-    } catch (error) {
+    } catch {
       return { error: null };
     }
   },
