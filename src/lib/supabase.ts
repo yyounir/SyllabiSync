@@ -2,12 +2,17 @@ import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_KEY || '';
+const supabaseUrl =
+  process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseAnonKey =
+  process.env.EXPO_PUBLIC_SUPABASE_KEY || 'placeholder-anon-key';
 
-if (!supabaseUrl || !supabaseAnonKey) {
+if (
+  !process.env.EXPO_PUBLIC_SUPABASE_URL ||
+  !process.env.EXPO_PUBLIC_SUPABASE_KEY
+) {
   console.warn(
-    'SyllabiSync: Supabase credentials missing. Ensure EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_KEY are set.'
+    'SyllabiSync: Supabase credentials missing. Ensure EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_KEY are set in your environment / Vercel project settings.'
   );
 }
 
