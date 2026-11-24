@@ -15,14 +15,15 @@ import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
 import { Colors } from '@/constants/colors';
 import { Spacing, Typography, BorderRadius } from '@/constants/theme';
-import { Lock, Mail, Sparkles } from 'lucide-react-native';
+import { Lock, Mail, Sparkles, Compass } from 'lucide-react-native';
 import { Logo } from '@/components/common/Logo';
 
 export default function LoginScreen() {
-  const { signIn } = useAuth();
+  const { signIn, signInAsDemo } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleLogin = async () => {
@@ -42,6 +43,14 @@ export default function LoginScreen() {
     } else {
       router.replace('/(tabs)/dashboard');
     }
+  };
+
+  const handleTryDemo = async () => {
+    setError(null);
+    setDemoLoading(true);
+    await signInAsDemo();
+    setDemoLoading(false);
+    router.replace('/(tabs)/dashboard');
   };
 
   return (
@@ -99,6 +108,27 @@ export default function LoginScreen() {
               style={styles.loginButton}
             />
 
+            {/* Divider */}
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Try Demo Option */}
+            <Button
+              title="Explore Demo (No Account Required)"
+              variant="outline"
+              icon={<Compass size={18} color={Colors.light.primary} />}
+              onPress={handleTryDemo}
+              loading={demoLoading}
+              fullWidth
+              style={styles.demoButton}
+            />
+            <Text style={styles.demoHintText}>
+              Instant access with sample courses, extracted deadlines & calendar sync
+            </Text>
+
             <View style={styles.footerRow}>
               <Text style={styles.footerText}>Don&apos;t have an account? </Text>
               <Link href="/(auth)/signup" asChild>
@@ -136,12 +166,6 @@ const styles = StyleSheet.create({
   },
   logoWrapper: {
     marginBottom: Spacing.three,
-  },
-  brandTitle: {
-    ...Typography['2xl'],
-    fontWeight: '800',
-    color: Colors.light.text,
-    letterSpacing: -0.6,
   },
   taglineBadge: {
     flexDirection: 'row',
@@ -189,13 +213,43 @@ const styles = StyleSheet.create({
   },
   loginButton: {
     marginTop: Spacing.two,
-    marginBottom: Spacing.four,
+    marginBottom: Spacing.three,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: Spacing.three,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.light.border,
+  },
+  dividerText: {
+    ...Typography.xs,
+    color: Colors.light.textMuted,
+    textTransform: 'uppercase',
+    paddingHorizontal: Spacing.three,
+    fontWeight: '600',
+  },
+  demoButton: {
+    borderColor: Colors.light.primary,
+    borderWidth: 1.5,
+    backgroundColor: '#F0F7FF',
+  },
+  demoHintText: {
+    ...Typography.xs,
+    color: Colors.light.textMuted,
+    textAlign: 'center',
+    marginTop: Spacing.two,
+    marginBottom: Spacing.two,
+    paddingHorizontal: Spacing.two,
   },
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: Spacing.two,
+    marginTop: Spacing.four,
   },
   footerText: {
     ...Typography.sm,

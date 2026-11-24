@@ -19,6 +19,7 @@ import {
   Plus,
   Upload,
   User,
+  Sparkles,
 } from 'lucide-react-native';
 import { Logo } from '@/components/common/Logo';
 
@@ -29,7 +30,7 @@ interface ResponsiveShellProps {
 export function ResponsiveShell({ children }: ResponsiveShellProps) {
   const isDesktop = useIsDesktop();
   const pathname = usePathname();
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, isDemo } = useAuth();
 
   const navItems = [
     {
@@ -118,9 +119,16 @@ export function ResponsiveShell({ children }: ResponsiveShellProps) {
                 <User size={18} color={Colors.light.primary} />
               </View>
               <View style={styles.userInfo}>
-                <Text style={styles.userName} numberOfLines={1}>
-                  {profile?.full_name || user?.email?.split('@')[0] || 'Student'}
-                </Text>
+                <View style={styles.userNameRow}>
+                  <Text style={styles.userName} numberOfLines={1}>
+                    {profile?.full_name || user?.email?.split('@')[0] || 'Student'}
+                  </Text>
+                  {isDemo && (
+                    <View style={styles.demoBadgeSmall}>
+                      <Text style={styles.demoBadgeSmallText}>DEMO</Text>
+                    </View>
+                  )}
+                </View>
                 <Text style={styles.userEmail} numberOfLines={1}>
                   {user?.email || ''}
                 </Text>
@@ -130,6 +138,7 @@ export function ResponsiveShell({ children }: ResponsiveShellProps) {
                   signOut();
                   router.replace('/(auth)/login');
                 }}
+                accessibilityLabel={isDemo ? 'Exit Demo' : 'Sign Out'}
                 style={({ pressed }) => [styles.logoutBtn, pressed && styles.pressed]}>
                 <LogOut size={16} color={Colors.light.textSecondary} />
               </Pressable>
@@ -140,6 +149,28 @@ export function ResponsiveShell({ children }: ResponsiveShellProps) {
 
       {/* Main Content Area */}
       <View style={isDesktop ? styles.mainContent : styles.mobileWrapper}>
+        {/* Subtle top banner when exploring in Demo Mode */}
+        {isDemo && (
+          <View style={styles.demoBanner}>
+            <View style={styles.demoBannerLeft}>
+              <Sparkles size={14} color={Colors.light.primary} />
+              <Text style={styles.demoBannerText}>
+                Demo Mode — All actions save locally in your browser.
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => {
+                signOut();
+                router.replace('/(auth)/login');
+              }}
+              style={({ pressed }) => [
+                styles.demoBannerExitBtn,
+                pressed && { opacity: 0.75 },
+              ]}>
+              <Text style={styles.demoBannerExitText}>Exit Demo</Text>
+            </Pressable>
+          </View>
+        )}
         {children}
       </View>
     </View>
@@ -259,10 +290,26 @@ const styles = StyleSheet.create({
   userInfo: {
     flex: 1,
   },
+  userNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   userName: {
     ...Typography.sm,
     fontWeight: '700',
     color: Colors.light.text,
+  },
+  demoBadgeSmall: {
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  demoBadgeSmallText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Colors.light.primary,
   },
   userEmail: {
     ...Typography.xs,
@@ -276,6 +323,39 @@ const styles = StyleSheet.create({
     flex: 1,
     height: '100%',
     overflow: 'hidden',
+  },
+  demoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#EFF6FF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#BFDBFE',
+    paddingVertical: 7,
+    paddingHorizontal: Spacing.four,
+  },
+  demoBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  demoBannerText: {
+    ...Typography.xs,
+    color: '#1E40AF',
+    fontWeight: '500',
+  },
+  demoBannerExitBtn: {
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+    marginLeft: Spacing.two,
+  },
+  demoBannerExitText: {
+    ...Typography.xs,
+    fontWeight: '700',
+    color: '#1E40AF',
   },
   pressed: {
     opacity: 0.8,

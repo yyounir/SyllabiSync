@@ -15,51 +15,54 @@ import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
 import { Colors } from '@/constants/colors';
 import { Spacing, Typography, BorderRadius } from '@/constants/theme';
-import { Lock, Mail, User, Sparkles } from 'lucide-react-native';
+import { Lock, Mail, User, Sparkles, Compass } from 'lucide-react-native';
 import { Logo } from '@/components/common/Logo';
 
-export default function SignUpScreen() {
-  const { signUp } = useAuth();
+export default function SignupScreen() {
+  const { signUp, signInAsDemo } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSignUp = async () => {
-    if (!fullName.trim()) {
-      setError('Please enter your full name');
-      return;
-    }
-    if (!email.trim() || !password) {
+    if (!fullName || !email || !password || !confirmPassword) {
       setError('Please fill in all fields');
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
+
     if (password !== confirmPassword) {
       setError('Passwords do not match');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
       return;
     }
 
     setError(null);
     setLoading(true);
 
-    const { error: signUpError } = await signUp(
-      email.trim(),
-      password,
-      fullName.trim()
-    );
+    const { error: signUpError } = await signUp(email.trim(), password, fullName.trim());
     setLoading(false);
 
     if (signUpError) {
-      setError(signUpError.message || 'Error creating account');
+      setError(signUpError.message || 'Failed to create account');
     } else {
       router.replace('/(tabs)/dashboard');
     }
+  };
+
+  const handleTryDemo = async () => {
+    setError(null);
+    setDemoLoading(true);
+    await signInAsDemo();
+    setDemoLoading(false);
+    router.replace('/(tabs)/dashboard');
   };
 
   return (
@@ -137,6 +140,24 @@ export default function SignUpScreen() {
               style={styles.signupButton}
             />
 
+            {/* Divider */}
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Try Demo Option */}
+            <Button
+              title="Explore Demo Instead"
+              variant="outline"
+              icon={<Compass size={18} color={Colors.light.primary} />}
+              onPress={handleTryDemo}
+              loading={demoLoading}
+              fullWidth
+              style={styles.demoButton}
+            />
+
             <View style={styles.footerRow}>
               <Text style={styles.footerText}>Already have an account? </Text>
               <Link href="/(auth)/login" asChild>
@@ -162,7 +183,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: Spacing.four,
-    paddingVertical: Spacing.six,
   },
   container: {
     width: '100%',
@@ -171,16 +191,10 @@ const styles = StyleSheet.create({
   },
   brandContainer: {
     alignItems: 'center',
-    marginBottom: Spacing.five,
+    marginBottom: Spacing.six,
   },
   logoWrapper: {
     marginBottom: Spacing.three,
-  },
-  brandTitle: {
-    ...Typography['2xl'],
-    fontWeight: '800',
-    color: Colors.light.text,
-    letterSpacing: -0.6,
   },
   taglineBadge: {
     flexDirection: 'row',
@@ -210,7 +224,7 @@ const styles = StyleSheet.create({
   cardSubtitle: {
     ...Typography.sm,
     color: Colors.light.textSecondary,
-    marginBottom: Spacing.four,
+    marginBottom: Spacing.five,
     marginTop: Spacing.one,
   },
   errorBanner: {
@@ -228,13 +242,35 @@ const styles = StyleSheet.create({
   },
   signupButton: {
     marginTop: Spacing.two,
-    marginBottom: Spacing.four,
+    marginBottom: Spacing.three,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: Spacing.three,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.light.border,
+  },
+  dividerText: {
+    ...Typography.xs,
+    color: Colors.light.textMuted,
+    textTransform: 'uppercase',
+    paddingHorizontal: Spacing.three,
+    fontWeight: '600',
+  },
+  demoButton: {
+    borderColor: Colors.light.primary,
+    borderWidth: 1.5,
+    backgroundColor: '#F0F7FF',
   },
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: Spacing.two,
+    marginTop: Spacing.four,
   },
   footerText: {
     ...Typography.sm,

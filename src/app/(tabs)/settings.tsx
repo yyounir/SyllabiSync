@@ -28,13 +28,14 @@ import {
   LogOut,
   Mail,
   RefreshCw,
+  Sparkles,
   User,
   X,
 } from 'lucide-react-native';
 import { Logo } from '@/components/common/Logo';
 
 export default function SettingsScreen() {
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, isDemo } = useAuth();
   const isDesktop = useIsDesktop();
 
   const [connection, setConnection] = useState<GoogleCalendarConnection | null>(null);
@@ -148,19 +149,47 @@ export default function SettingsScreen() {
 
         {/* Profile Card */}
         <Card variant="elevated" style={styles.card}>
-          <Text style={styles.sectionTitle}>Account Profile</Text>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.sectionTitle}>Account Profile</Text>
+            {isDemo && (
+              <Badge label="Demo Mode" variant="primary" />
+            )}
+          </View>
           <View style={styles.profileRow}>
             <View style={styles.avatarBox}>
               <User size={24} color={Colors.light.primary} />
             </View>
             <View style={styles.profileDetails}>
               <Text style={styles.profileName}>
-                {profile?.full_name || user?.email?.split('@')[0] || 'Student'}
+                {profile?.full_name || (isDemo ? 'Demo Student' : user?.email?.split('@')[0]) || 'Student'}
               </Text>
-              <Text style={styles.profileEmail}>{user?.email || 'student@syllabisync.app'}</Text>
-              <Text style={styles.accountType}>Active Student Workspace</Text>
+              <Text style={styles.profileEmail}>{user?.email || 'demo.student@syllabisync.edu'}</Text>
+              <Text style={styles.accountType}>
+                {isDemo ? 'Local Interactive Demo Session' : 'Active Student Workspace'}
+              </Text>
             </View>
           </View>
+
+          {isDemo && (
+            <View style={styles.demoNoticeBox}>
+              <Sparkles size={16} color={Colors.light.primary} style={{ marginTop: 2 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.demoNoticeTitle}>You are exploring in Demo Mode</Text>
+                <Text style={styles.demoNoticeText}>
+                  All sample courses, syllabus uploads, and deadline edits are saved locally on this device. You can create a free account anytime to enable cloud syncing.
+                </Text>
+                <Button
+                  title="Create Free Account"
+                  variant="outline"
+                  onPress={async () => {
+                    await signOut();
+                    router.replace('/(auth)/signup');
+                  }}
+                  style={styles.demoCreateAccountBtn}
+                />
+              </View>
+            </View>
+          )}
         </Card>
 
         {/* Google Calendar Sync Settings */}
@@ -275,7 +304,7 @@ export default function SettingsScreen() {
           </View>
 
           <Button
-            title="Sign Out of SyllabiSync"
+            title={isDemo ? "Exit Demo Mode" : "Sign Out of SyllabiSync"}
             variant="danger"
             icon={<LogOut size={16} color="#FFFFFF" />}
             onPress={handleSignOut}
@@ -620,5 +649,32 @@ const styles = StyleSheet.create({
   modalActions: {
     flexDirection: 'row',
     gap: Spacing.two,
+  },
+  demoNoticeBox: {
+    flexDirection: 'row',
+    gap: Spacing.three,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.four,
+    marginTop: Spacing.four,
+  },
+  demoNoticeTitle: {
+    ...Typography.sm,
+    fontWeight: '700',
+    color: '#1E40AF',
+    marginBottom: 4,
+  },
+  demoNoticeText: {
+    ...Typography.xs,
+    color: '#3B82F6',
+    lineHeight: 18,
+    marginBottom: Spacing.three,
+  },
+  demoCreateAccountBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#93C5FD',
   },
 });
