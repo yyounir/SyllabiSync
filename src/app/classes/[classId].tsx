@@ -28,6 +28,7 @@ import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
 import { ProgressBar } from '@/components/common/ProgressBar';
 import { EmptyState } from '@/components/common/EmptyState';
+import { StudyAssistantChat } from '@/components/chat/StudyAssistantChat';
 import { Colors } from '@/constants/colors';
 import { Spacing, Typography, BorderRadius, MaxContentWidth } from '@/constants/theme';
 import {
@@ -35,6 +36,7 @@ import {
   ArchiveRestore,
   ArrowLeft,
   BookOpen,
+  Bot,
   Calendar,
   CheckCircle2,
   Clock,
@@ -136,6 +138,7 @@ export default function ClassDashboardScreen() {
   // ==========================================
   const [deleteConfirmModalVisible, setDeleteConfirmModalVisible] = useState(false);
   const [deletingClass, setDeletingClass] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const handleToggleArchive = async () => {
     if (!classData || !classId) return;
@@ -512,6 +515,14 @@ export default function ClassDashboardScreen() {
               size="sm"
               icon={<Trash2 size={14} color={Colors.light.danger} />}
               onPress={() => setDeleteConfirmModalVisible(true)}
+            />
+            <Button
+              title="Study AI"
+              variant="outline"
+              size="sm"
+              icon={<Bot size={14} color={themeColor} />}
+              onPress={() => setChatOpen(true)}
+              style={{ borderColor: themeColor }}
             />
             <Button
               title="Upload Syllabus"
@@ -1662,6 +1673,14 @@ export default function ClassDashboardScreen() {
             </Card>
           </View>
         </Modal>
+        {/* Course-Scoped Study Assistant Chat */}
+        <StudyAssistantChat
+          activeClasses={classData ? [classData] : []}
+          upcomingItems={items}
+          initialSelectedClass={classData}
+          isOpenExternal={chatOpen ? true : undefined}
+          onCloseExternal={() => setChatOpen(false)}
+        />
       </View>
     </ScrollView>
   );

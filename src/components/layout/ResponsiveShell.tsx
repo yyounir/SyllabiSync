@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,8 +20,13 @@ import {
   Upload,
   User,
   Sparkles,
+  Bot,
 } from 'lucide-react-native';
 import { Logo } from '@/components/common/Logo';
+import { classService } from '@/services/class.service';
+import { academicItemService } from '@/services/academic-item.service';
+import { ClassItem, AcademicItem } from '@/types/database';
+import { StudyAssistantChat } from '@/components/chat/StudyAssistantChat';
 
 interface ResponsiveShellProps {
   children: React.ReactNode;
@@ -31,6 +36,29 @@ export function ResponsiveShell({ children }: ResponsiveShellProps) {
   const isDesktop = useIsDesktop();
   const pathname = usePathname();
   const { user, profile, signOut, isDemo } = useAuth();
+
+  const currentUserId = user?.id || (isDemo ? 'demo_user' : 'guest_student');
+  const [courses, setCourses] = useState<ClassItem[]>([]);
+  const [deadlines, setDeadlines] = useState<AcademicItem[]>([]);
+  const [chatOpen, setChatOpen] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([
+      classService.getClasses(currentUserId),
+      academicItemService.getItems(currentUserId),
+    ])
+      .then(([classRes, itemsRes]) => {
+        if (!mounted) return;
+        if (classRes.data) setCourses(classRes.data);
+        if (itemsRes.data) setDeadlines(itemsRes.data);
+      })
+      .catch(() => {});
+
+    return () => {
+      mounted = false;
+    };
+  }, [currentUserId, pathname]);
 
   const navItems = [
     {
@@ -73,6 +101,13 @@ export function ResponsiveShell({ children }: ResponsiveShellProps) {
 
           {/* Quick Actions */}
           <View style={styles.quickActionSection}>
+            <Pressable
+              style={({ pressed }) => [styles.aiChatButton, pressed && styles.pressed]}
+              onPress={() => setChatOpen(true)}>
+              <Bot size={16} color="#FFFFFF" />
+              <Text style={styles.aiChatButtonText}>Ask Study AI</Text>
+            </Pressable>
+
             <Pressable
               style={({ pressed }) => [styles.uploadButton, pressed && styles.pressed]}
               onPress={() => router.push('/classes/upload-syllabus')}>
@@ -172,6 +207,14 @@ export function ResponsiveShell({ children }: ResponsiveShellProps) {
           </View>
         )}
         {children}
+
+        {/* Floating Mini Chatbot Assistant */}
+        <StudyAssistantChat
+          activeClasses={courses}
+          upcomingItems={deadlines}
+          isOpenExternal={chatOpen ? true : undefined}
+          onCloseExternal={() => setChatOpen(false)}
+        />
       </View>
     </View>
   );
@@ -206,6 +249,21 @@ const styles = StyleSheet.create({
   quickActionSection: {
     gap: Spacing.two,
     marginBottom: Spacing.five,
+  },
+  aiChatButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+    backgroundColor: '#3B82F6',
+    paddingVertical: 10,
+    paddingHorizontal: Spacing.three,
+    borderRadius: BorderRadius.md,
+  },
+  aiChatButtonText: {
+    ...Typography.sm,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   uploadButton: {
     flexDirection: 'row',
