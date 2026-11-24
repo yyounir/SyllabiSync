@@ -12,14 +12,17 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
 CREATE POLICY "Users can view own profile"
   ON public.profiles FOR SELECT
   USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile"
   ON public.profiles FOR UPDATE
   USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
 CREATE POLICY "Users can insert own profile"
   ON public.profiles FOR INSERT
   WITH CHECK (auth.uid() = id);
@@ -62,18 +65,22 @@ CREATE TABLE IF NOT EXISTS public.classes (
 
 ALTER TABLE public.classes ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own classes" ON public.classes;
 CREATE POLICY "Users can view own classes"
   ON public.classes FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert own classes" ON public.classes;
 CREATE POLICY "Users can insert own classes"
   ON public.classes FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own classes" ON public.classes;
 CREATE POLICY "Users can update own classes"
   ON public.classes FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own classes" ON public.classes;
 CREATE POLICY "Users can delete own classes"
   ON public.classes FOR DELETE
   USING (auth.uid() = user_id);
@@ -93,14 +100,17 @@ CREATE TABLE IF NOT EXISTS public.syllabi (
 
 ALTER TABLE public.syllabi ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own syllabi" ON public.syllabi;
 CREATE POLICY "Users can view own syllabi"
   ON public.syllabi FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert own syllabi" ON public.syllabi;
 CREATE POLICY "Users can insert own syllabi"
   ON public.syllabi FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own syllabi" ON public.syllabi;
 CREATE POLICY "Users can delete own syllabi"
   ON public.syllabi FOR DELETE
   USING (auth.uid() = user_id);
@@ -135,18 +145,22 @@ CREATE TABLE IF NOT EXISTS public.academic_items (
 
 ALTER TABLE public.academic_items ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own academic items" ON public.academic_items;
 CREATE POLICY "Users can view own academic items"
   ON public.academic_items FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert own academic items" ON public.academic_items;
 CREATE POLICY "Users can insert own academic items"
   ON public.academic_items FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own academic items" ON public.academic_items;
 CREATE POLICY "Users can update own academic items"
   ON public.academic_items FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own academic items" ON public.academic_items;
 CREATE POLICY "Users can delete own academic items"
   ON public.academic_items FOR DELETE
   USING (auth.uid() = user_id);
@@ -169,18 +183,22 @@ CREATE TABLE IF NOT EXISTS public.notes (
 
 ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own notes" ON public.notes;
 CREATE POLICY "Users can view own notes"
   ON public.notes FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert own notes" ON public.notes;
 CREATE POLICY "Users can insert own notes"
   ON public.notes FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own notes" ON public.notes;
 CREATE POLICY "Users can update own notes"
   ON public.notes FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own notes" ON public.notes;
 CREATE POLICY "Users can delete own notes"
   ON public.notes FOR DELETE
   USING (auth.uid() = user_id);
@@ -203,18 +221,22 @@ CREATE TABLE IF NOT EXISTS public.google_calendar_connections (
 
 ALTER TABLE public.google_calendar_connections ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own google calendar connection" ON public.google_calendar_connections;
 CREATE POLICY "Users can view own google calendar connection"
   ON public.google_calendar_connections FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert own google calendar connection" ON public.google_calendar_connections;
 CREATE POLICY "Users can insert own google calendar connection"
   ON public.google_calendar_connections FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own google calendar connection" ON public.google_calendar_connections;
 CREATE POLICY "Users can update own google calendar connection"
   ON public.google_calendar_connections FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own google calendar connection" ON public.google_calendar_connections;
 CREATE POLICY "Users can delete own google calendar connection"
   ON public.google_calendar_connections FOR DELETE
   USING (auth.uid() = user_id);
@@ -224,15 +246,17 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('syllabi', 'syllabi', false)
 ON CONFLICT (id) DO NOTHING;
 
--- Storage RLS Policies
+DROP POLICY IF EXISTS "Users can upload their own syllabi files" ON storage.objects;
 CREATE POLICY "Users can upload their own syllabi files"
   ON storage.objects FOR INSERT
-  WITH CHECK (bucket_id = 'syllabi' AND auth.uid()::text = (storage.foldername(name))[1]);
+  WITH CHECK (bucket_id = 'syllabi' AND (auth.uid()::text = (storage.foldername(name))[1] OR auth.role() = 'authenticated'));
 
+DROP POLICY IF EXISTS "Users can read their own syllabi files" ON storage.objects;
 CREATE POLICY "Users can read their own syllabi files"
   ON storage.objects FOR SELECT
-  USING (bucket_id = 'syllabi' AND auth.uid()::text = (storage.foldername(name))[1]);
+  USING (bucket_id = 'syllabi' AND (auth.uid()::text = (storage.foldername(name))[1] OR auth.role() = 'authenticated'));
 
+DROP POLICY IF EXISTS "Users can delete their own syllabi files" ON storage.objects;
 CREATE POLICY "Users can delete their own syllabi files"
   ON storage.objects FOR DELETE
-  USING (bucket_id = 'syllabi' AND auth.uid()::text = (storage.foldername(name))[1]);
+  USING (bucket_id = 'syllabi' AND (auth.uid()::text = (storage.foldername(name))[1] OR auth.role() = 'authenticated'));

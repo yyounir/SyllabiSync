@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as LegacyFileSystem from 'expo-file-system/legacy';
+import { File as ModernFile } from 'expo-file-system';
 import { GoogleGenAI } from '@google/genai';
 import { ExtractedSyllabus, ExtractedSyllabusSchema } from '@/types/academic';
 import { syllabusService } from './syllabus.service';
@@ -26,30 +27,79 @@ export const aiSyllabusService = {
   async convertFileToBase64(file: SelectedFile): Promise<string> {
     if (file.base64) return file.base64;
 
-    if (Platform.OS === 'web' && file.file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const res = reader.result as string;
-          const base64 = res.split(',')[1] || res;
-          resolve(base64);
-        };
-        reader.onerror = (err) => reject(err);
-        reader.readAsDataURL(file.file!);
-      });
-    }
-
-    if (Platform.OS !== 'web' && file.uri) {
-      const fsAny = FileSystem as any;
-      if (typeof fsAny.readAsStringAsync === 'function') {
-        const base64 = await fsAny.readAsStringAsync(file.uri, {
-          encoding: fsAny.EncodingType?.Base64 || 'base64',
+    // Method 1: Web File API with FileReader
+    if (Platform.OS === 'web' && file.file && typeof FileReader !== 'undefined') {
+      try {
+        return await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const res = reader.result as string;
+            const base64 = res.split(',')[1] || res;
+            resolve(base64);
+          };
+          reader.onerror = (err) => reject(err);
+          reader.readAsDataURL(file.file!);
         });
-        return base64;
+      } catch (e) {
+        console.warn('FileReader on file.file failed, trying next method:', e);
       }
     }
 
-    throw new Error('Unable to read syllabus file as base64');
+    // Method 2: expo-file-system/legacy (the recommended migration path for readAsStringAsync)
+    if (file.uri) {
+      try {
+        if (typeof LegacyFileSystem.readAsStringAsync === 'function') {
+          const base64 = await LegacyFileSystem.readAsStringAsync(file.uri, {
+            encoding: LegacyFileSystem.EncodingType.Base64,
+          });
+          if (base64) return base64;
+        }
+      } catch (legacyErr) {
+        console.warn('LegacyFileSystem.readAsStringAsync attempt:', legacyErr);
+      }
+    }
+
+    // Method 3: Modern expo-file-system File API
+    if (file.uri) {
+      try {
+        if (typeof ModernFile === 'function') {
+          const modernFile = new ModernFile(file.uri);
+          if (typeof modernFile.arrayBuffer === 'function') {
+            const buffer = await modernFile.arrayBuffer();
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+              binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
+          }
+        }
+      } catch (modernErr) {
+        console.warn('ModernFile arrayBuffer attempt:', modernErr);
+      }
+    }
+
+    // Method 4: Universal fetch(uri) -> blob -> FileReader
+    if (file.uri && typeof FileReader !== 'undefined') {
+      try {
+        const response = await fetch(file.uri);
+        const blob = await response.blob();
+        return await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const res = reader.result as string;
+            const base64 = res.split(',')[1] || res;
+            resolve(base64);
+          };
+          reader.onerror = (err) => reject(err);
+          reader.readAsDataURL(blob);
+        });
+      } catch (blobErr) {
+        console.warn('fetch blob reader attempt:', blobErr);
+      }
+    }
+
+    throw new Error('Unable to read document file. Please select another file.');
   },
 
   async analyzeSyllabus(
@@ -65,7 +115,7 @@ export const aiSyllabusService = {
       // 2. Upload file to Supabase storage (non-blocking if storage bucket not configured)
       let storagePath: string | null = null;
       try {
-        if (userId) {
+        if (userId && userId !== 'guest_student') {
           const { path } = await syllabusService.uploadSyllabusFile(userId, {
             ...file,
             base64,
@@ -103,9 +153,11 @@ export const aiSyllabusService = {
       }
 
       // 4. Client-side direct Gemini fallback (in case server API route is unreachable or on native)
-      const apiKey = process.env.GEMINI_API_KEY || process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+      const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
       if (!apiKey) {
-        throw new Error('Gemini API key is not configured');
+        throw new Error(
+          'EXPO_PUBLIC_GEMINI_API_KEY is not configured. Please ensure EXPO_PUBLIC_GEMINI_API_KEY is in your .env file and restart Expo with npx expo start -c'
+        );
       }
 
       const ai = new GoogleGenAI({ apiKey });
@@ -129,13 +181,11 @@ CRITICAL: Never invent dates or policies. Return valid JSON only.`;
         });
       }
 
-      const modelsToTry = ['gemini-3.8-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'];
       let responseText = '';
-
-      for (const model of modelsToTry) {
+      for (let attempt = 1; attempt <= 3; attempt++) {
         try {
           const res = await ai.models.generateContent({
-            model,
+            model: 'gemini-3.8-flash',
             contents,
             config: {
               systemInstruction: systemPrompt,
@@ -144,8 +194,11 @@ CRITICAL: Never invent dates or policies. Return valid JSON only.`;
           });
           responseText = res.text?.trim() || '';
           if (responseText) break;
-        } catch (modelErr) {
-          console.warn(`Model ${model} fallback error:`, modelErr);
+        } catch (modelErr: any) {
+          console.warn(`Direct Gemini attempt ${attempt} warning:`, modelErr);
+          if (attempt < 3) {
+            await new Promise((resolve) => setTimeout(resolve, 1200));
+          }
         }
       }
 

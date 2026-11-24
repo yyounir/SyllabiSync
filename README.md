@@ -56,7 +56,7 @@ Create a `.env` file in the root directory:
 ```env
 EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 EXPO_PUBLIC_SUPABASE_KEY=your-supabase-anon-key
-GEMINI_API_KEY=your-gemini-api-key
+EXPO_PUBLIC_GEMINI_API_KEY=your-gemini-api-key
 ```
 
 ### 3. Database Migration

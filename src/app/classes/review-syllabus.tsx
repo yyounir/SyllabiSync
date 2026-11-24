@@ -120,13 +120,17 @@ export default function ReviewSyllabusScreen() {
 
       // 2. Record Syllabus in database if storagePath exists
       if (storagePath) {
-        await syllabusService.recordSyllabus(
-          classRow.id,
-          user.id,
-          storagePath,
-          originalFilename,
-          description
-        );
+        try {
+          await syllabusService.recordSyllabus(
+            classRow.id,
+            user.id,
+            storagePath,
+            originalFilename,
+            description
+          );
+        } catch (sylErr) {
+          console.warn('Non-blocking syllabus record warning:', sylErr);
+        }
       }
 
       // 3. Save Academic Items in bulk

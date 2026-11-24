@@ -1,13 +1,23 @@
+import dns from 'node:dns';
 import { GoogleGenAI } from '@google/genai';
 import mammoth from 'mammoth';
 import { ExtractedSyllabusSchema } from '@/types/academic';
 
+// On Windows, Node.js can hang on IPv6 DNS resolution for Google APIs; prefer IPv4
+try {
+  if (dns && typeof dns.setDefaultResultOrder === 'function') {
+    dns.setDefaultResultOrder('ipv4first');
+  }
+} catch {
+  // Ignore in environments where node:dns is not supported
+}
+
 export async function POST(request: Request) {
   try {
-    const apiKey = process.env.GEMINI_API_KEY || process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+    const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
     if (!apiKey) {
       return Response.json(
-        { error: 'Server GEMINI_API_KEY is not configured in .env' },
+        { error: 'EXPO_PUBLIC_GEMINI_API_KEY is not configured in .env' },
         { status: 500 }
       );
     }
@@ -120,15 +130,14 @@ Output MUST strictly be valid JSON matching this schema:
       });
     }
 
-    // Call Gemini with structured output, trying active models
-    const modelsToTry = ['gemini-3.8-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'];
-    let lastError: any = null;
+    // Call Gemini 3.8 Flash with automatic retry on temporary traffic spikes (503)
     let responseText = '';
+    let lastError: any = null;
 
-    for (const model of modelsToTry) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         const response = await ai.models.generateContent({
-          model,
+          model: 'gemini-3.8-flash',
           contents,
           config: {
             systemInstruction: systemPrompt,
@@ -141,7 +150,11 @@ Output MUST strictly be valid JSON matching this schema:
         }
       } catch (err: any) {
         lastError = err;
-        console.warn(`Model ${model} failed, trying next model:`, err.message || err);
+        console.warn(`Gemini attempt ${attempt} warning:`, err.message || err);
+        if (attempt < 3) {
+          // Wait briefly before retrying
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+        }
       }
     }
 
